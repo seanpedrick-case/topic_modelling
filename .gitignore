@@ -3,6 +3,7 @@
 *.npz
 *.csv
 *.pkl
+*.parquet
 .ipynb_checkpoints/*
 old_code/*
 model/*

@@ -1,0 +1,13 @@
+Need to add option to anonymise - done
+
+Need to add option to deduplicate
+
+Need option to sample for X number of rows with specific seed
+
+Add plotly visualisation - done
+
+Add zero shot topic list support
+
+Add topic renaming with LLMs - done
+
+Option to predict topics on a new dataset - done (kind of - just save model to file)

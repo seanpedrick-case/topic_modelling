@@ -3,8 +3,7 @@ import os
 #os.environ["TOKENIZERS_PARALLELISM"] = "true"
 #os.environ["HF_HOME"] = "/mnt/c/..."
 #os.environ["CUDA_PATH"] = "/mnt/c/..."
-
-print(os.environ["HF_HOME"])
+#print(os.environ["HF_HOME"])
 
 import gradio as gr
 from datetime import datetime
