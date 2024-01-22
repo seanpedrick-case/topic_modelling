@@ -1,0 +1,8 @@
+*.pyc
+*.ipynb
+*.npz
+*.csv
+*.pkl
+.ipynb_checkpoints/*
+old_code/*
+model/*

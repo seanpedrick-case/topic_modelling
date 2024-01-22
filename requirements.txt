@@ -1,0 +1,11 @@
+gradio==3.50.0
+transformers
+accelerate
+torch
+llama-cpp-python
+bertopic
+spacy
+pyarrow
+faker
+presidio_analyzer
+presidio_anonymizer
