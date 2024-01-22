@@ -2,7 +2,7 @@
 title: Topic modelling
 emoji: 🚀
 colorFrom: red
-colorTo: yellw
+colorTo: yellow
 sdk: gradio
 sdk_version: 3.50.0
 app_file: app.py
