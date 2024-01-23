@@ -9,7 +9,7 @@ import torch.cuda
 from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, TextGeneration
 from funcs.prompts import capybara_prompt, capybara_start, open_hermes_prompt, open_hermes_start, stablelm_prompt, stablelm_start
 
-
+random_seed = 42
 
 chosen_prompt = open_hermes_prompt # stablelm_prompt 
 chosen_start_tag =  open_hermes_start # stablelm_start
@@ -117,7 +117,7 @@ llm_config = LLamacppInitConfigGpu(last_n_tokens_size=last_n_tokens_size,
 
 ## Create representation model parameters ##
 # KeyBERT
-keybert = KeyBERTInspired()
+keybert = KeyBERTInspired(random_state=random_seed)
 
 def create_representation_model(create_llm_topic_labels, llm_config, hf_model_name, hf_model_file, chosen_start_tag):
 

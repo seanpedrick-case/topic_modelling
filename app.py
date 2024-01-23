@@ -242,7 +242,15 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
     zip_folder(topic_model_save_name_folder, topic_model_save_name_zip)
     output_list.append(topic_model_save_name_zip)
 
+    if return_intermediate_files == "Yes":
+        print("Saving embeddings to file")
+        semantic_search_file_name = data_file_name_no_ext + '_' + 'embeddings.npz'
+        np.savez_compressed(semantic_search_file_name, embeddings_out)
+
+        output_list.append(semantic_search_file_name)
+
     # Visualise the topics:
+    print("Creating visualisation")
     topics_vis = topic_model.visualize_documents(label_col, reduced_embeddings=reduced_embeddings, hide_annotations=True, hide_document_hover=False, custom_labels=True)
 
     return output_text, output_list, topics_vis
@@ -290,7 +298,7 @@ with block:
         with gr.Accordion("Data load and processing options", open = True):
             with gr.Row():
                 anonymise_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Anonymise data on file load. Names and other details are replaced with tags e.g. '<person>'.")
-                return_intermediate_files = gr.Dropdown(label = "Return intermediate processing files from file preparation. Files can be loaded in to save processing time in future.", value="No", choices=["Yes", "No"])
+                return_intermediate_files = gr.Dropdown(label = "Return intermediate processing files from file preparation. Files can be loaded in to save processing time in future.", value="Yes", choices=["Yes", "No"])
                 embedding_super_compress = gr.Dropdown(label = "Round embeddings to three dp for smaller files with less accuracy.", value="No", choices=["Yes", "No"])
             with gr.Row():
                 low_resource_mode_opt = gr.Dropdown(label = "Use low resource embeddings model based on TF-IDF (consider if embedding generation is slow).", value="No", choices=["Yes", "No"])
