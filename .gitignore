@@ -4,6 +4,10 @@
 *.csv
 *.pkl
 *.parquet
+*.png
+*.safetensors
+*.json
 .ipynb_checkpoints/*
 old_code/*
 model/*
+output_model/*

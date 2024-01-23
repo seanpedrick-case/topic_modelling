@@ -11,7 +11,7 @@ if cuda.is_available():
 else: 
     torch_device =  "cpu"
 
-def make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_model, return_intermediate_files, embeddings_super_compress, low_resource_mode_opt):
+def make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_model, return_intermediate_files, embeddings_super_compress, low_resource_mode_opt, reduce_embeddings="Yes"):
 
     embeddings_file_names = [string.lower() for string in file_list if "embedding" in string.lower()]  
 
@@ -38,10 +38,18 @@ def make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_mo
             TruncatedSVD(100)
             )
 
-            embeddings_out = embedding_model.encode(sentences=docs, show_progress_bar = True, batch_size = 32)
+            # Fit the pipeline to the text data
+            embedding_model.fit(docs)
+
+            # Transform text data to embeddings
+            embeddings_out = embedding_model.transform(docs)
+
+            #embeddings_out = embedding_model.encode(sentences=docs, show_progress_bar = True, batch_size = 32)
 
         elif low_resource_mode_opt == "No":
             print("Creating dense embeddings based on transformers model")
+
+            #print("Embedding model is: ", embedding_model)
 
             embeddings_out = embedding_model.encode(sentences=docs, max_length=1024, show_progress_bar = True, batch_size = 32) # For Jina # # 
 
@@ -72,7 +80,8 @@ def make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_mo
                 np.savez_compressed(semantic_search_file_name, embeddings_out_round)
 
     # Pre-reduce embeddings for visualisation purposes
-    reduced_embeddings = UMAP(n_neighbors=15, n_components=2, min_dist=0.0, metric='cosine', random_state=42).fit_transform(embeddings_out)
+    if reduce_embeddings == "Yes":
+        reduced_embeddings = UMAP(n_neighbors=15, n_components=2, min_dist=0.0, metric='cosine', random_state=42).fit_transform(embeddings_out)
+        return embeddings_out, reduced_embeddings
 
-
-    return embeddings_out, reduced_embeddings
+    return embeddings_out, None

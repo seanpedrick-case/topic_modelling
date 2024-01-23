@@ -9,8 +9,6 @@ import torch.cuda
 from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, TextGeneration
 from funcs.prompts import capybara_prompt, capybara_start, open_hermes_prompt, open_hermes_start, stablelm_prompt, stablelm_start
 
-#from huggingface_hub import hf_hub_download
-#hf_hub_download(repo_id='second-state/stablelm-2-zephyr-1.6b-GGUF', filename='stablelm-2-zephyr-1_6b-Q5_K_M.gguf')
 
 hf_model_name =  'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF' # 'second-state/stablelm-2-zephyr-1.6b-GGUF'
 hf_model_file =   'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf' # 'stablelm-2-zephyr-1_6b-Q5_K_M.gguf'
@@ -18,9 +16,9 @@ chosen_prompt = open_hermes_prompt # stablelm_prompt
 chosen_start_tag =  open_hermes_start # stablelm_start
 
 # Find model file
-def find_model_file(hf_model_name, hf_model_file):
-    hf_loc = os.environ["HF_HOME"]
-    hf_sub_loc = os.environ["HF_HOME"] + "/hub/"
+def find_model_file(hf_model_name, hf_model_file, search_folder):
+    hf_loc = search_folder #os.environ["HF_HOME"]
+    hf_sub_loc = search_folder + "/hub/" #os.environ["HF_HOME"] 
 
     hf_model_name_path = hf_sub_loc + 'models--' + hf_model_name.replace("/","--")
 
@@ -36,16 +34,19 @@ def find_model_file(hf_model_name, hf_model_file):
     folder_path = hf_model_name_path  # Replace with your folder path
     file_to_find = hf_model_file         # Replace with the file name you're looking for
 
-    found_file = find_file(folder_path, file_to_find)
+    found_file = find_file(folder_path, file_to_find) # os.environ["HF_HOME"]
     if found_file:
         print(f"File found: {found_file}")
         return found_file
     else:
         error = "File not found."
-        print(error)
-        return error
+        print(error, " Downloading model from hub")
+        from huggingface_hub import hf_hub_download
+        hf_hub_download(repo_id=hf_model_name, filename='phi-2-orange.Q5_K_M.gguf')
+        found_file = find_file(folder_path, file_to_find)
+        return found_file
 
-found_file = find_model_file(hf_model_name, hf_model_file)
+found_file = find_model_file(hf_model_name, hf_model_file, os.environ["HF_HOME"])#".")
 
 # Currently set n_gpu_layers to 0 even with cuda due to persistent bugs in implementation with cuda
 if torch.cuda.is_available():
@@ -57,7 +58,7 @@ else:
     low_resource_mode = "Yes"
     n_gpu_layers = 0
 
-#low_resource_mode = "Yes"
+low_resource_mode = "No" # Override for testing
 
 #print("Running on device:", torch_device)
 n_threads = torch.get_num_threads()
@@ -140,32 +141,32 @@ gen_config = LLamacppGenerateConfig(
 # KeyBERT
 keybert = KeyBERTInspired()
 
-if low_resource_mode == "No":
-    # Use llama.cpp to load in model
-    llm = Llama(model_path=found_file, stop=chosen_start_tag, n_gpu_layers=n_gpu_layers, n_ctx=n_ctx) #**gpu_config.model_dump())# 
-    #print(llm.n_gpu_layers)
-    llm_model = LlamaCPP(llm, prompt=chosen_prompt)#, **gen_config.model_dump())
+def create_representation_model(create_llm_topic_labels, gpu_config, found_file, chosen_start_tag):
 
-    # All representation models
-    representation_model = {
-    "KeyBERT": keybert,
-    "Mistral": llm_model
-    }
+    if create_llm_topic_labels == "Yes":
+        # Use llama.cpp to load in model
+        llm = Llama(model_path=found_file, stop=chosen_start_tag, n_gpu_layers=gpu_config.n_gpu_layers, n_ctx=gpu_config.n_ctx) #**gpu_config.model_dump())# 
+        #print(llm.n_gpu_layers)
+        llm_model = LlamaCPP(llm, prompt=chosen_prompt)#, **gen_config.model_dump())
 
-elif low_resource_mode == "Yes":
-    representation_model = {"KeyBERT": keybert}
+        # All representation models
+        representation_model = {
+        "KeyBERT": keybert,
+        "Mistral": llm_model
+        }
 
-# Deprecated example using CTransformers. This package is not really used anymore
-#model = AutoModelForCausalLM.from_pretrained('NousResearch/Nous-Capybara-7B-V1.9-GGUF', model_type='mistral', model_file='Capybara-7B-V1.9-Q5_K_M.gguf', hf=True, **vars(gpu_config))
-#tokenizer = AutoTokenizer.from_pretrained("NousResearch/Nous-Capybara-7B-V1.9")
-#generator = pipeline(task="text-generation", model=model, tokenizer=tokenizer)
+    elif create_llm_topic_labels == "No":
+        representation_model = {"KeyBERT": keybert}
 
-# Text generation with Llama 2
-#mistral_capybara = TextGeneration(generator, prompt=capybara_prompt)
-#mistral_hermes = TextGeneration(generator, prompt=open_hermes_prompt)
+    # Deprecated example using CTransformers. This package is not really used anymore
+    #model = AutoModelForCausalLM.from_pretrained('NousResearch/Nous-Capybara-7B-V1.9-GGUF', model_type='mistral', model_file='Capybara-7B-V1.9-Q5_K_M.gguf', hf=True, **vars(gpu_config))
+    #tokenizer = AutoTokenizer.from_pretrained("NousResearch/Nous-Capybara-7B-V1.9")
+    #generator = pipeline(task="text-generation", model=model, tokenizer=tokenizer)
 
+    # Text generation with Llama 2
+    #mistral_capybara = TextGeneration(generator, prompt=capybara_prompt)
+    #mistral_hermes = TextGeneration(generator, prompt=open_hermes_prompt)
+        
+    return representation_model
 
-
-# MMR (is rubbish, don't use)
-#mmr = MaximalMarginalRelevance(diversity=0.3)
 

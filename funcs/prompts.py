@@ -37,7 +37,7 @@ ASSISTANT:Topic label:"""
 
 capybara_prompt = capybara_example_prompt + capybara_main_prompt
 
-print("Capybara prompt: ", capybara_prompt)
+#print("Capybara prompt: ", capybara_prompt)
 
 # System prompt describes information given to all conversations
 open_hermes_start="<|im_start|>"
@@ -72,7 +72,7 @@ Topic label:
 """
 open_hermes_prompt = open_hermes_system_prompt + open_hermes_example_prompt + open_hermes_main_prompt
 
-print("Open Hermes prompt: ", open_hermes_prompt)
+#print("Open Hermes prompt: ", open_hermes_prompt)
 
 stablelm_start = "<|user|>"
 stablelm_example_prompt = """<|user|>
@@ -103,4 +103,4 @@ Topic label:"""
 
 stablelm_prompt = stablelm_example_prompt + stablelm_main_prompt
 
-print("StableLM prompt: ", stablelm_prompt)
+#print("StableLM prompt: ", stablelm_prompt)

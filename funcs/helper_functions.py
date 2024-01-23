@@ -1,4 +1,5 @@
 import os
+import zipfile
 import re
 import pandas as pd
 import gradio as gr
@@ -87,3 +88,35 @@ def dummy_function(in_colnames):
     A dummy function that exists just so that dropdown updates work correctly.
     """
     return None
+
+# Zip the above to export file
+
+
+def zip_folder(folder_path, output_zip_file):
+    # Create a ZipFile object in write mode
+    with zipfile.ZipFile(output_zip_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # Walk through the directory
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                # Create a complete file path
+                file_path = os.path.join(root, file)
+                # Add file to the zip file
+                # The arcname argument sets the archive name, i.e., the name within the zip file
+                zipf.write(file_path, arcname=os.path.relpath(file_path, folder_path))
+
+def delete_files_in_folder(folder_path):
+    # Check if the folder exists
+    if not os.path.exists(folder_path):
+        print(f"The folder {folder_path} does not exist.")
+        return
+
+    # Iterate over all files in the folder and remove each
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            else:
+                print(f"Skipping {file_path} as it is a directory")
+        except Exception as e:
+            print(f"Failed to delete {file_path}. Reason: {e}")
