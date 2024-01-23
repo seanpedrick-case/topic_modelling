@@ -10,8 +10,11 @@ from sklearn.pipeline import make_pipeline
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 import funcs.anonymiser as anon
+from umap import UMAP
 
 from torch import cuda, backends, version
+
+random_seed = 42
 
 # Check for torch cuda
 print("Is CUDA enabled? ", cuda.is_available())
@@ -71,9 +74,14 @@ elif low_resource_mode == "Yes":
                 TruncatedSVD(2) # 100 # set to 2 to be compatible with zero shot topics - can't be higher than number of topics
                 )
 
+# Model used for representing topics
+hf_model_name =  'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF' # 'second-state/stablelm-2-zephyr-1.6b-GGUF'
+hf_model_file =   'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf' # 'stablelm-2-zephyr-1_6b-Q5_K_M.gguf'
+
 
 def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels):
     
+    output_list = []
     file_list = [string.name for string in in_file]
 
     data_file_names = [string.lower() for string in file_list if "tokenised" not in string and "npz" not in string.lower() and "gz" not in string.lower()]
@@ -90,7 +98,9 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
     if anonymise_drop == "Yes":
         in_files_anon_col, anonymisation_success = anon.anonymise_script(in_files, in_colnames_list_first, anon_strat="replace")
         in_files[in_colnames_list_first] = in_files_anon_col[in_colnames_list_first]
-        in_files.to_csv("anonymised_data.csv")
+        anonymise_data_name = "anonymised_data.csv"
+        in_files.to_csv(anonymise_data_name)
+        output_list.append(anonymise_data_name)
 
     docs = list(in_files[in_colnames_list_first].str.lower())
     label_col = in_files[in_label_list_first]
@@ -116,49 +126,34 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
         print("Choosing low resource TfIDF model")
         embedding_model_pipe = make_pipeline(
                 TfidfVectorizer(),
-                TruncatedSVD(2) # 100 # To be compatible with zero shot, this needs to be lower than number of suggested topics
+                TruncatedSVD(100) # 100 # To be compatible with zero shot, this needs to be lower than number of suggested topics
                 )
         embedding_model = embedding_model_pipe
 
     embeddings_out, reduced_embeddings = make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_model, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels)
 
-    # all_lengths = [len(embedding) for embedding in embeddings_out]
-    # if len(set(all_lengths)) > 1:
-    #     print("Inconsistent lengths found in embeddings_out:", set(all_lengths))
-    # else:
-    #     print("All lengths are the same.")
-
-    # print("Embeddings type: ", type(embeddings_out))
-
-    # if isinstance(embeddings_out, np.ndarray):
-    #     print("my_object is a NumPy ndarray")
-    # else:
-    #     print("my_object is not a NumPy ndarray")
-
-    # Clustering set to K-means (not used)
-    #cluster_model = KMeans(n_clusters=max_topics_slider)
-
-    # Countvectoriser removes stopwords, combines terms up to 2 together:
-    #if min_docs_slider < 3:
-    #    min_df_val = min_docs_slider
-    #else:
-    #    min_df_val = 3
-
-    #print(min_df_val)
-
-    vectoriser_model = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=0.1)
 
     
+
+    vectoriser_model = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=0.1)
+    
     from funcs.prompts import capybara_prompt, capybara_start, open_hermes_prompt, open_hermes_start, stablelm_prompt, stablelm_start
-    from funcs.representation_model import create_representation_model, found_file, gpu_config, chosen_start_tag
+    from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag
 
     print("Create LLM topic labels:", create_llm_topic_labels)
-    representation_model = create_representation_model(create_llm_topic_labels, gpu_config, found_file, chosen_start_tag)
+    representation_model = create_representation_model(create_llm_topic_labels, llm_config, hf_model_name, hf_model_file, chosen_start_tag)
+
+
+    
+
+
 
     if not candidate_topics:
+        umap_model = UMAP(n_neighbors=15, n_components=5, random_state=random_seed)
+
         topic_model = BERTopic( embedding_model=embedding_model_pipe, 
-                                #hdbscan_model=cluster_model,
                                 vectorizer_model=vectoriser_model,
+                                umap_model=umap_model,
                                 min_topic_size= min_docs_slider,
                                 nr_topics = max_topics_slider,
                                 representation_model=representation_model,
@@ -167,17 +162,26 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
         topics_text, probs = topic_model.fit_transform(docs, embeddings_out)   
 
 
-    # Do this if you have pre-assigned topics
-    else:   
+    # Do this if you have pre-defined topics
+    else:
+        if low_resource_mode == "Yes":
+            error_message = "Zero shot topic modelling currently not compatible with low-resource embeddings. Please change this option to 'No' on the options tab and retry."
+            print(error_message)
+
+            return error_message, output_list, None
+
         zero_shot_topics = read_file(candidate_topics.name)
-        #print(zero_shot_topics)
         zero_shot_topics_lower = list(zero_shot_topics.iloc[:, 0].str.lower())
 
-        print(zero_shot_topics_lower)
+        if len(zero_shot_topics_lower) < 15:
+            umap_neighbours = len(zero_shot_topics_lower)
+        else: umap_neighbours = 15
+
+        umap_model = UMAP(n_neighbors=umap_neighbours, n_components=5, random_state=random_seed)
 
         topic_model = BERTopic( embedding_model=embedding_model_pipe,
-                                #hdbscan_model=cluster_model,
                                 vectorizer_model=vectoriser_model,
+                                umap_model=umap_model,
                                 min_topic_size = min_docs_slider,
                                 nr_topics = max_topics_slider,
                                 zeroshot_topic_list = zero_shot_topics_lower,
@@ -188,7 +192,7 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
         topics_text, probs = topic_model.fit_transform(docs, embeddings_out)
 
     if not topics_text:
-        return "No topics found, original file returned", data_file_name, None
+        return "No topics found.", data_file_name, None
         
     else: 
         print("Preparing topic model outputs.")
@@ -199,8 +203,9 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
     if topic_dets.shape[0] == 1:
         topic_det_output_name = "topic_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
         topic_dets.to_csv(topic_det_output_name)
+        output_list.append(topic_det_output_name)
 
-        return "No topics found, original file returned", [data_file_name, topic_det_output_name], None
+        return "No topics found, original file returned", output_list, None
 
     # Replace original labels with LLM labels
     if "Mistral" in topic_model.get_topic_info().columns:
@@ -213,17 +218,16 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
     
     topic_det_output_name = "topic_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
     topic_dets.to_csv(topic_det_output_name)
+    output_list.append(topic_det_output_name)
 
     doc_det_output_name = "doc_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
     doc_dets = topic_model.get_document_info(docs)[["Document",	"Topic", "Name", "Representative_document"]] # "Probability",
     doc_dets.to_csv(doc_det_output_name)
+    output_list.append(doc_det_output_name)
 
     topics_text_out_str = str(topic_dets["Name"])
     output_text = "Topics: " + topics_text_out_str
    
-    embedding_file_name = data_file_name_no_ext + '_' + 'embeddings.npz'
-    np.savez_compressed(embedding_file_name, embeddings_out)
-
     #if low_resource_mode == "No":
     topic_model_save_name_folder = "output_model/" + data_file_name_no_ext + "_topics_" + today_rev# + ".safetensors"
     topic_model_save_name_zip = topic_model_save_name_folder + ".zip"
@@ -236,19 +240,12 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
     # Zip file example
     
     zip_folder(topic_model_save_name_folder, topic_model_save_name_zip)
+    output_list.append(topic_model_save_name_zip)
 
     # Visualise the topics:
     topics_vis = topic_model.visualize_documents(label_col, reduced_embeddings=reduced_embeddings, hide_annotations=True, hide_document_hover=False, custom_labels=True)
 
-    #return output_text, [doc_det_output_name, topic_det_output_name, embedding_file_name, topic_model_save_name_zip], topics_vis
-
-    #elif low_resource_mode == "Yes":
-    #    # Visualise the topics:
-    #    topics_vis = topic_model.visualize_documents(label_col, reduced_embeddings=reduced_embeddings, hide_annotations=True, hide_document_hover=False, custom_labels=True)
-    
-    #    return output_text, [doc_det_output_name, topic_det_output_name, embedding_file_name], topics_vis
-
-    return output_text, [doc_det_output_name, topic_det_output_name, embedding_file_name, topic_model_save_name_zip], topics_vis
+    return output_text, output_list, topics_vis
 
 # , topic_model_save_name
 
@@ -262,13 +259,10 @@ with block:
  
     gr.Markdown(
     """
-    # Extract topics from text
-    Enter open text below to get topics. You can copy and paste text directly, or upload a file and specify the column that you want to topics.
+    # Topic modeller
+    Generate topics from open text in tabular data. Upload a file (csv, xlsx, or parquet), then specify the columns that you want to use to generate topics and use for labels in the visualisation. If you have an embeddings .npz file of the text made using the 'jina-embeddings-v2-small-en' model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available under the 'Options' tab.
     """)    
-   
-    #with gr.Accordion("I will copy and paste my open text", open = False):
-    #    in_text = gr.Textbox(label="Copy and paste your open text here", lines = 5)
-        
+          
     with gr.Tab("Load files and find topics"):
         with gr.Accordion("Load data file", open = True):
             in_files = gr.File(label="Input text from file", file_count="multiple")
@@ -276,8 +270,8 @@ with block:
                 in_colnames = gr.Dropdown(choices=["Choose a column"], multiselect = True, label="Select column to find topics (first will be chosen if multiple selected).")
                 in_label = gr.Dropdown(choices=["Choose a column"], multiselect = True, label="Select column to for labelling documents in the output visualisation.")
 
-        with gr.Accordion("I have my own list of topics. File should have at least one column with a header and topic keywords in cells below. Topics will be taken from the first column of the file", open = False):
-            candidate_topics = gr.File(label="Input topics from file (csv)")
+        with gr.Accordion("I have my own list of topics (zero shot topic modelling).", open = False):
+            candidate_topics = gr.File(label="Input topics from file (csv). File should have at least one column with a header and topic keywords in cells below. Topics will be taken from the first column of the file. Currently not compatible with low-resource embeddings.")
             
         with gr.Row():
             min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 15, step = 1, label = "Minimum number of documents needed to create topic")
@@ -292,14 +286,14 @@ with block:
 
         plot = gr.Plot(label="Visualise your topics here:")
     
-    with gr.Tab("Load and data processing options"):
-        with gr.Accordion("Process data on load", open = True):
+    with gr.Tab("Options"):
+        with gr.Accordion("Data load and processing options", open = True):
             with gr.Row():
                 anonymise_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Anonymise data on file load. Names and other details are replaced with tags e.g. '<person>'.")
                 return_intermediate_files = gr.Dropdown(label = "Return intermediate processing files from file preparation. Files can be loaded in to save processing time in future.", value="No", choices=["Yes", "No"])
                 embedding_super_compress = gr.Dropdown(label = "Round embeddings to three dp for smaller files with less accuracy.", value="No", choices=["Yes", "No"])
             with gr.Row():
-                low_resource_mode_opt = gr.Dropdown(label = "Low resource mode (non-AI embeddings, no LLM-generated topic names).", value="No", choices=["Yes", "No"])
+                low_resource_mode_opt = gr.Dropdown(label = "Use low resource embeddings model based on TF-IDF (consider if embedding generation is slow).", value="No", choices=["Yes", "No"])
                 create_llm_topic_labels = gr.Dropdown(label = "Create LLM-generated topic labels.", value="No", choices=["Yes", "No"])
 
     # Update column names dropdown when file uploaded

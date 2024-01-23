@@ -10,8 +10,7 @@ from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, T
 from funcs.prompts import capybara_prompt, capybara_start, open_hermes_prompt, open_hermes_start, stablelm_prompt, stablelm_start
 
 
-hf_model_name =  'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF' # 'second-state/stablelm-2-zephyr-1.6b-GGUF'
-hf_model_file =   'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf' # 'stablelm-2-zephyr-1_6b-Q5_K_M.gguf'
+
 chosen_prompt = open_hermes_prompt # stablelm_prompt 
 chosen_start_tag =  open_hermes_start # stablelm_start
 
@@ -46,7 +45,7 @@ def find_model_file(hf_model_name, hf_model_file, search_folder):
         found_file = find_file(folder_path, file_to_find)
         return found_file
 
-found_file = find_model_file(hf_model_name, hf_model_file, os.environ["HF_HOME"])#".")
+
 
 # Currently set n_gpu_layers to 0 even with cuda due to persistent bugs in implementation with cuda
 if torch.cuda.is_available():
@@ -120,10 +119,16 @@ llm_config = LLamacppInitConfigGpu(last_n_tokens_size=last_n_tokens_size,
 # KeyBERT
 keybert = KeyBERTInspired()
 
-def create_representation_model(create_llm_topic_labels, llm_config, found_file, chosen_start_tag):
+def create_representation_model(create_llm_topic_labels, llm_config, hf_model_name, hf_model_file, chosen_start_tag):
 
     if create_llm_topic_labels == "Yes":
         # Use llama.cpp to load in model
+
+        # Check for HF_HOME environment variable and supply a default value if it's not found (current folder)
+        hf_home_value = os.getenv("HF_HOME", '.')
+
+        found_file = find_model_file(hf_model_name, hf_model_file, hf_home_value)
+
         llm = Llama(model_path=found_file, stop=chosen_start_tag, n_gpu_layers=llm_config.n_gpu_layers, n_ctx=llm_config.n_ctx) #**llm_config.model_dump())# 
         #print(llm.n_gpu_layers)
         llm_model = LlamaCPP(llm, prompt=chosen_prompt)#, **gen_config.model_dump())
