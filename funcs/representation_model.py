@@ -100,7 +100,7 @@ class LLamacppInitConfigGpu(BaseModel):
     def update_gpu(self, new_value: int):
         self.n_gpu_layers = new_value
 
-gpu_config = LLamacppInitConfigGpu(last_n_tokens_size=last_n_tokens_size,
+llm_config = LLamacppInitConfigGpu(last_n_tokens_size=last_n_tokens_size,
     seed=seed,
     n_threads=n_threads,
     n_batch=n_batch,
@@ -116,36 +116,15 @@ gpu_config = LLamacppInitConfigGpu(last_n_tokens_size=last_n_tokens_size,
     stop=chosen_start_tag,
     trust_remote_code=trust_remote_code)
 
-cpu_config = gpu_config.model_copy()
-cpu_config.update_gpu(0)
-
-class LLamacppGenerateConfig(BaseModel):
-    temperature: float
-    top_k: int
-    top_p: float
-    repeat_penalty: float
-    max_tokens: int
-    reset: bool
-    stream: bool
-
-gen_config = LLamacppGenerateConfig(
-    temperature=temperature,
-    top_k=top_k,
-    top_p=top_p,
-    repeat_penalty=repeat_penalty,
-    max_tokens=max_tokens,
-    reset=reset,
-    stream=stream)
-
 ## Create representation model parameters ##
 # KeyBERT
 keybert = KeyBERTInspired()
 
-def create_representation_model(create_llm_topic_labels, gpu_config, found_file, chosen_start_tag):
+def create_representation_model(create_llm_topic_labels, llm_config, found_file, chosen_start_tag):
 
     if create_llm_topic_labels == "Yes":
         # Use llama.cpp to load in model
-        llm = Llama(model_path=found_file, stop=chosen_start_tag, n_gpu_layers=gpu_config.n_gpu_layers, n_ctx=gpu_config.n_ctx) #**gpu_config.model_dump())# 
+        llm = Llama(model_path=found_file, stop=chosen_start_tag, n_gpu_layers=llm_config.n_gpu_layers, n_ctx=llm_config.n_ctx) #**llm_config.model_dump())# 
         #print(llm.n_gpu_layers)
         llm_model = LlamaCPP(llm, prompt=chosen_prompt)#, **gen_config.model_dump())
 
@@ -159,7 +138,7 @@ def create_representation_model(create_llm_topic_labels, gpu_config, found_file,
         representation_model = {"KeyBERT": keybert}
 
     # Deprecated example using CTransformers. This package is not really used anymore
-    #model = AutoModelForCausalLM.from_pretrained('NousResearch/Nous-Capybara-7B-V1.9-GGUF', model_type='mistral', model_file='Capybara-7B-V1.9-Q5_K_M.gguf', hf=True, **vars(gpu_config))
+    #model = AutoModelForCausalLM.from_pretrained('NousResearch/Nous-Capybara-7B-V1.9-GGUF', model_type='mistral', model_file='Capybara-7B-V1.9-Q5_K_M.gguf', hf=True, **vars(llm_config))
     #tokenizer = AutoTokenizer.from_pretrained("NousResearch/Nous-Capybara-7B-V1.9")
     #generator = pipeline(task="text-generation", model=model, tokenizer=tokenizer)
 
