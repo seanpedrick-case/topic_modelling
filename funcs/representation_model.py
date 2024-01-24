@@ -119,7 +119,7 @@ llm_config = LLamacppInitConfigGpu(last_n_tokens_size=last_n_tokens_size,
 # KeyBERT
 keybert = KeyBERTInspired(random_state=random_seed)
 # MMR
-mmr = MaximalMarginalRelevance(diversity=0.3)
+mmr = MaximalMarginalRelevance(diversity=0.2)
 
 def create_representation_model(create_llm_topic_labels, llm_config, hf_model_name, hf_model_file, chosen_start_tag, low_resource_mode):
 

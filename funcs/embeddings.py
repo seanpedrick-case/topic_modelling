@@ -35,7 +35,7 @@ def make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_mo
             print("Creating simplified 'sparse' embeddings based on TfIDF")
             embedding_model = make_pipeline(
             TfidfVectorizer(),
-            TruncatedSVD(100, random_state=random_seed)
+            TruncatedSVD(2000, random_state=random_seed)
             )
 
             # Fit the pipeline to the text data

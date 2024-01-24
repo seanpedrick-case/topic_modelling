@@ -295,7 +295,7 @@ with block:
             candidate_topics = gr.File(label="Input topics from file (csv). File should have at least one column with a header and topic keywords in cells below. Topics will be taken from the first column of the file. Currently not compatible with low-resource embeddings.")
             
         with gr.Row():
-            min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 15, step = 1, label = "Minimum number of documents per topic (use ~3 for low resource mode).")
+            min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 15, step = 1, label = "Minimum number of similar documents needed to make a topic.")
             max_topics_slider = gr.Slider(minimum = 2, maximum = 500, value = 3, step = 1, label = "Maximum number of topics")
 
         with gr.Row():
@@ -305,7 +305,7 @@ with block:
             output_single_text = gr.Textbox(label="Output example (first example in dataset)")
             output_file = gr.File(label="Output file")
 
-        plot = gr.Plot(label="Visualise your topics here:")
+        plot = gr.Plot(label="Visualise your topics here. Go to the 'Options' tab to enable.")
     
     with gr.Tab("Options"):
         with gr.Accordion("Data load and processing options", open = True):
@@ -317,7 +317,7 @@ with block:
                 low_resource_mode_opt = gr.Dropdown(label = "Use low resource embeddings and processing.", value="No", choices=["Yes", "No"])
                 create_llm_topic_labels = gr.Dropdown(label = "Create LLM-generated topic labels.", value="No", choices=["Yes", "No"])
                 save_topic_model = gr.Dropdown(label = "Save topic model to file.", value="Yes", choices=["Yes", "No"])
-                visualise_topics = gr.Dropdown(label = "Create a visualisation to map topics.", value="Yes", choices=["Yes", "No"])
+                visualise_topics = gr.Dropdown(label = "Create a visualisation to map topics.", value="No", choices=["Yes", "No"])
 
     # Update column names dropdown when file uploaded
     in_files.upload(fn=put_columns_in_df, inputs=[in_files], outputs=[in_colnames, in_label, data_state])    
