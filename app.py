@@ -80,7 +80,7 @@ hf_model_name =  'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1
 hf_model_file =   'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf' # 'stablelm-2-zephyr-1_6b-Q5_K_M.gguf'
 
 
-def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels, save_topic_model, visualise_topics):
+def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels, save_topic_model, visualise_topics, reduce_outliers):
     
     all_tic = time.perf_counter()
 
@@ -99,11 +99,16 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
         in_label_list_first = in_colnames_list_first
     
     if anonymise_drop == "Yes":
+        anon_tic = time.perf_counter()
+        time_out = f"Creating visualisation took {all_toc - vis_tic:0.1f} seconds"
         in_files_anon_col, anonymisation_success = anon.anonymise_script(in_files, in_colnames_list_first, anon_strat="replace")
         in_files[in_colnames_list_first] = in_files_anon_col[in_colnames_list_first]
         anonymise_data_name = "anonymised_data.csv"
         in_files.to_csv(anonymise_data_name)
         output_list.append(anonymise_data_name)
+
+        anon_toc = time.perf_counter()
+        time_out = f"Anonymising text took {anon_toc - anon_tic:0.1f} seconds"
 
     docs = list(in_files[in_colnames_list_first].str.lower())
     label_col = in_files[in_label_list_first]
@@ -115,7 +120,7 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
     print("Low resource mode: ", low_resource_mode)
 
     if low_resource_mode == "No":
-        print("Choosing high resource Jina transformer model")
+        print("Using high resource Jina transformer model")
         try:
             embedding_model = AutoModel.from_pretrained(local_embeddings_location, revision = revision_choice, trust_remote_code=True,local_files_only=True, device_map="auto")
         except:
@@ -125,7 +130,8 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
 
         embedding_model_pipe = pipeline("feature-extraction", model=embedding_model, tokenizer=tokenizer)
 
-        umap_model = UMAP(n_neighbors=15, n_components=5, random_state=random_seed)
+        # UMAP model uses Bertopic defaults
+        umap_model = UMAP(n_neighbors=15, n_components=5, min_dist=0.0, metric='cosine', low_memory=False, random_state=random_seed)
 
     elif low_resource_mode == "Yes":
         print("Choosing low resource TF-IDF model.")
@@ -140,8 +146,7 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
 
     embeddings_out, reduced_embeddings = make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_model, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels)
 
-
-    vectoriser_model = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=0.05, max_df=0.9)
+    vectoriser_model = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=0.1)
     
     from funcs.prompts import capybara_prompt, capybara_start, open_hermes_prompt, open_hermes_start, stablelm_prompt, stablelm_start
     from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag
@@ -152,13 +157,22 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
 
     if not candidate_topics:
         
-        topic_model = BERTopic( embedding_model=embedding_model_pipe, 
-                                vectorizer_model=vectoriser_model,
-                                umap_model=umap_model,
-                                min_topic_size= min_docs_slider,
-                                nr_topics = max_topics_slider,
-                                representation_model=representation_model,
-                                verbose = True)
+        # Generate representation model here if topics won't be changed later
+        if reduce_outliers == "No":
+            topic_model = BERTopic( embedding_model=embedding_model_pipe,
+                                    vectorizer_model=vectoriser_model,
+                                    umap_model=umap_model,
+                                    min_topic_size = min_docs_slider,
+                                    nr_topics = max_topics_slider,
+                                    representation_model=representation_model,
+                                    verbose = True)
+        else:
+            topic_model = BERTopic( embedding_model=embedding_model_pipe,
+                                    vectorizer_model=vectoriser_model,
+                                    umap_model=umap_model,
+                                    min_topic_size = min_docs_slider,
+                                    nr_topics = max_topics_slider,
+                                    verbose = True)
 
         topics_text, probs = topic_model.fit_transform(docs, embeddings_out)   
 
@@ -174,15 +188,26 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
         zero_shot_topics = read_file(candidate_topics.name)
         zero_shot_topics_lower = list(zero_shot_topics.iloc[:, 0].str.lower())
 
-        topic_model = BERTopic( embedding_model=embedding_model_pipe,
-                                vectorizer_model=vectoriser_model,
-                                umap_model=umap_model,
-                                min_topic_size = min_docs_slider,
-                                nr_topics = max_topics_slider,
-                                zeroshot_topic_list = zero_shot_topics_lower,
-                                zeroshot_min_similarity = 0.5,#0.7,
-                                representation_model=representation_model,
-                                verbose = True)
+        # Generate representation model here if topics won't be changed later
+        if reduce_outliers == "No":
+            topic_model = BERTopic( embedding_model=embedding_model_pipe,
+                                    vectorizer_model=vectoriser_model,
+                                    umap_model=umap_model,
+                                    min_topic_size = min_docs_slider,
+                                    nr_topics = max_topics_slider,
+                                    zeroshot_topic_list = zero_shot_topics_lower,
+                                    zeroshot_min_similarity = 0.5,#0.7,
+                                    representation_model=representation_model,
+                                    verbose = True)
+        else:
+            topic_model = BERTopic( embedding_model=embedding_model_pipe,
+                                    vectorizer_model=vectoriser_model,
+                                    umap_model=umap_model,
+                                    min_topic_size = min_docs_slider,
+                                    nr_topics = max_topics_slider,
+                                    zeroshot_topic_list = zero_shot_topics_lower,
+                                    zeroshot_min_similarity = 0.5,#0.7,
+                                    verbose = True)
         
         topics_text, probs = topic_model.fit_transform(docs, embeddings_out)
 
@@ -191,6 +216,15 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
         
     else: 
         print("Preparing topic model outputs.")
+
+    # Reduce outliers if required
+    if reduce_outliers == "Yes":
+        print("Reducing outliers.")
+        # Calculate the c-TF-IDF representation for each outlier document and find the best matching c-TF-IDF topic representation using cosine similarity.
+        topics_text = topic_model.reduce_outliers(docs, topics_text, strategy="embeddings")
+        # Then, update the topics to the ones that considered the new data
+        topic_model.update_topics(docs, topics=topics_text, vectorizer_model=vectoriser_model, representation_model=representation_model)
+        print("Finished reducing outliers.")
 
     topic_dets = topic_model.get_topic_info()
     #print(topic_dets.columns)
@@ -299,7 +333,7 @@ with block:
             
         with gr.Row():
             min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 15, step = 1, label = "Minimum number of similar documents needed to make a topic.")
-            max_topics_slider = gr.Slider(minimum = 2, maximum = 500, value = 3, step = 1, label = "Maximum number of topics")
+            max_topics_slider = gr.Slider(minimum = 2, maximum = 500, value = 10, step = 1, label = "Maximum number of topics")
 
         with gr.Row():
             topics_btn = gr.Button("Extract topics")
@@ -319,6 +353,8 @@ with block:
             with gr.Row():
                 low_resource_mode_opt = gr.Dropdown(label = "Use low resource embeddings and processing.", value="No", choices=["Yes", "No"])
                 create_llm_topic_labels = gr.Dropdown(label = "Create LLM-generated topic labels.", value="No", choices=["Yes", "No"])
+                reduce_outliers = gr.Dropdown(label = "Reduce outliers by selecting closest topic.", value="No", choices=["Yes", "No"])
+            with gr.Row():
                 save_topic_model = gr.Dropdown(label = "Save topic model to file.", value="Yes", choices=["Yes", "No"])
                 visualise_topics = gr.Dropdown(label = "Create a visualisation to map topics.", value="No", choices=["Yes", "No"])
 
@@ -326,7 +362,7 @@ with block:
     in_files.upload(fn=put_columns_in_df, inputs=[in_files], outputs=[in_colnames, in_label, data_state])    
     in_colnames.change(dummy_function, in_colnames, None)
 
-    topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embedding_super_compress, low_resource_mode_opt, create_llm_topic_labels, save_topic_model, visualise_topics], outputs=[output_single_text, output_file, plot], api_name="topics")
+    topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embedding_super_compress, low_resource_mode_opt, create_llm_topic_labels, save_topic_model, visualise_topics, reduce_outliers], outputs=[output_single_text, output_file, plot], api_name="topics")
 
 block.queue().launch(debug=True)#, server_name="0.0.0.0", ssl_verify=False, server_port=7860)
 

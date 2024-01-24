@@ -1,25 +1,32 @@
+from spacy.cli import download
 import spacy
+spacy.prefer_gpu()
 import os
 
-def is_model_installed(model_name):
+def spacy_model_installed(model_name):
     try:
-        # Try to load the model
+        import en_core_web_sm
+        en_core_web_sm.load()
+        print("Successfully imported spaCy model")
+        #nlp = spacy.load("en_core_web_sm")
+        #print(nlp._path)
+    except:
+        download(model_name)
         spacy.load(model_name)
-        return True
-    except OSError:
-        return False
+        print("Successfully imported spaCy model")
+    #print(nlp._path)
 
+
+#if not is_model_installed(model_name):
+#    os.system(f"python -m spacy download {model_name}")
 model_name = "en_core_web_sm"
-if not is_model_installed(model_name):
-    os.system(f"python -m spacy download {model_name}")
+spacy_model_installed(model_name)
 
-
+spacy.load(model_name)
 # Need to overwrite version of gradio present in Huggingface spaces as it doesn't have like buttons/avatars (Oct 2023)
 #os.system("pip uninstall -y gradio")
 #os.system("pip install gradio==3.50.0")
 #os.system("python -m spacy download en_core_web_lg")
-
-spacy.load(model_name)
 
 import re
 import secrets
