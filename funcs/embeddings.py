@@ -35,7 +35,7 @@ def make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_mo
             print("Creating simplified 'sparse' embeddings based on TfIDF")
             embedding_model = make_pipeline(
             TfidfVectorizer(),
-            TruncatedSVD(100)
+            TruncatedSVD(100, random_state=random_seed)
             )
 
             # Fit the pipeline to the text data
@@ -69,7 +69,11 @@ def make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_mo
 
     # Pre-reduce embeddings for visualisation purposes
     if reduce_embeddings == "Yes":
-        reduced_embeddings = UMAP(n_neighbors=15, n_components=2, min_dist=0.0, metric='cosine', random_state=random_seed).fit_transform(embeddings_out)
-        return embeddings_out, reduced_embeddings
+        if low_resource_mode_opt == "No":
+            reduced_embeddings = UMAP(n_neighbors=15, n_components=2, min_dist=0.0, metric='cosine', random_state=random_seed).fit_transform(embeddings_out)
+            return embeddings_out, reduced_embeddings
+        else:
+            reduced_embeddings = TruncatedSVD(2, random_state=random_seed).fit_transform(embeddings_out)
+            return embeddings_out, reduced_embeddings
 
     return embeddings_out, None

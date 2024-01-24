@@ -121,7 +121,7 @@ keybert = KeyBERTInspired(random_state=random_seed)
 # MMR
 mmr = MaximalMarginalRelevance(diversity=0.3)
 
-def create_representation_model(create_llm_topic_labels, llm_config, hf_model_name, hf_model_file, chosen_start_tag):
+def create_representation_model(create_llm_topic_labels, llm_config, hf_model_name, hf_model_file, chosen_start_tag, low_resource_mode):
 
     if create_llm_topic_labels == "Yes":
         # Use llama.cpp to load in model
@@ -142,8 +142,11 @@ def create_representation_model(create_llm_topic_labels, llm_config, hf_model_na
         }
 
     elif create_llm_topic_labels == "No":
-        representation_model = {"KeyBERT": keybert}
-        #representation_model = {"mmr": mmr}
+        if low_resource_mode == "Yes":
+            #representation_model = {"mmr": mmr}
+            representation_model = {"KeyBERT": keybert}
+        else:
+            representation_model = {"KeyBERT": keybert}
 
     # Deprecated example using CTransformers. This package is not really used anymore
     #model = AutoModelForCausalLM.from_pretrained('NousResearch/Nous-Capybara-7B-V1.9-GGUF', model_type='mistral', model_file='Capybara-7B-V1.9-Q5_K_M.gguf', hf=True, **vars(llm_config))

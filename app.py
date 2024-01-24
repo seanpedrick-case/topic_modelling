@@ -2,7 +2,8 @@ import gradio as gr
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from sklearn.cluster import KMeans
+import time
+#from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import CountVectorizer
 from transformers import AutoModel, AutoTokenizer
 from transformers.pipelines import pipeline
@@ -81,6 +82,8 @@ hf_model_file =   'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf' # '
 
 def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels, save_topic_model, visualise_topics):
     
+    all_tic = time.perf_counter()
+
     output_list = []
     file_list = [string.name for string in in_file]
 
@@ -122,18 +125,22 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
 
         embedding_model_pipe = pipeline("feature-extraction", model=embedding_model, tokenizer=tokenizer)
 
+        umap_model = UMAP(n_neighbors=15, n_components=5, random_state=random_seed)
+
     elif low_resource_mode == "Yes":
-        print("Choosing low resource TfIDF model")
+        print("Choosing low resource TF-IDF model")
         embedding_model_pipe = make_pipeline(
                 TfidfVectorizer(),
                 TruncatedSVD(100) # 100 # To be compatible with zero shot, this needs to be lower than number of suggested topics
                 )
         embedding_model = embedding_model_pipe
 
+        umap_model = TruncatedSVD(n_components=3, random_state=random_seed)
+
+
+
     embeddings_out, reduced_embeddings = make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_model, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels)
 
-
-    
 
     vectoriser_model = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=0.1)
     
@@ -141,19 +148,14 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
     from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag
 
     print("Create LLM topic labels:", create_llm_topic_labels)
-    representation_model = create_representation_model(create_llm_topic_labels, llm_config, hf_model_name, hf_model_file, chosen_start_tag)
-
-
-    
-
+    representation_model = create_representation_model(create_llm_topic_labels, llm_config, hf_model_name, hf_model_file, chosen_start_tag, low_resource_mode)  
 
 
     if not candidate_topics:
-        #umap_model = UMAP(n_neighbors=15, n_components=5, random_state=random_seed)
-
+        
         topic_model = BERTopic( embedding_model=embedding_model_pipe, 
                                 vectorizer_model=vectoriser_model,
-                                #umap_model=umap_model,
+                                umap_model=umap_model,
                                 min_topic_size= min_docs_slider,
                                 nr_topics = max_topics_slider,
                                 representation_model=representation_model,
@@ -173,15 +175,9 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
         zero_shot_topics = read_file(candidate_topics.name)
         zero_shot_topics_lower = list(zero_shot_topics.iloc[:, 0].str.lower())
 
-        if len(zero_shot_topics_lower) < 15:
-            umap_neighbours = len(zero_shot_topics_lower)
-        else: umap_neighbours = 15
-
-        #umap_model = UMAP(n_neighbors=umap_neighbours, n_components=5, random_state=random_seed)
-
         topic_model = BERTopic( embedding_model=embedding_model_pipe,
                                 vectorizer_model=vectoriser_model,
-                                #umap_model=umap_model,
+                                umap_model=umap_model,
                                 min_topic_size = min_docs_slider,
                                 nr_topics = max_topics_slider,
                                 zeroshot_topic_list = zero_shot_topics_lower,
@@ -252,10 +248,23 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
 
     if visualise_topics == "Yes":
         # Visualise the topics:
+        vis_tic = time.perf_counter()
         print("Creating visualisation")
         topics_vis = topic_model.visualize_documents(label_col, reduced_embeddings=reduced_embeddings, hide_annotations=True, hide_document_hover=False, custom_labels=True)
 
+        all_toc = time.perf_counter()
+        time_out = f"Creating visualisation took {all_toc - vis_tic:0.1f} seconds"
+        print(time_out)
+
+        
+        time_out = f"All processes took {all_toc - all_tic:0.1f} seconds"
+        print(time_out)
+
         return output_text, output_list, topics_vis
+
+    all_toc = time.perf_counter()
+    time_out = f"All processes took {all_toc - all_tic:0.1f} seconds"
+    print(time_out)
 
     return output_text, output_list, None
 
@@ -286,7 +295,7 @@ with block:
             candidate_topics = gr.File(label="Input topics from file (csv). File should have at least one column with a header and topic keywords in cells below. Topics will be taken from the first column of the file. Currently not compatible with low-resource embeddings.")
             
         with gr.Row():
-            min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 15, step = 1, label = "Minimum number of documents needed to create topic")
+            min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 15, step = 1, label = "Minimum number of documents per topic (use ~3 for low resource mode).")
             max_topics_slider = gr.Slider(minimum = 2, maximum = 500, value = 3, step = 1, label = "Maximum number of topics")
 
         with gr.Row():
@@ -305,7 +314,7 @@ with block:
                 return_intermediate_files = gr.Dropdown(label = "Return intermediate processing files from file preparation. Files can be loaded in to save processing time in future.", value="Yes", choices=["Yes", "No"])
                 embedding_super_compress = gr.Dropdown(label = "Round embeddings to three dp for smaller files with less accuracy.", value="No", choices=["Yes", "No"])
             with gr.Row():
-                low_resource_mode_opt = gr.Dropdown(label = "Use low resource embeddings model.", value="No", choices=["Yes", "No"])
+                low_resource_mode_opt = gr.Dropdown(label = "Use low resource embeddings and processing.", value="No", choices=["Yes", "No"])
                 create_llm_topic_labels = gr.Dropdown(label = "Create LLM-generated topic labels.", value="No", choices=["Yes", "No"])
                 save_topic_model = gr.Dropdown(label = "Save topic model to file.", value="Yes", choices=["Yes", "No"])
                 visualise_topics = gr.Dropdown(label = "Create a visualisation to map topics.", value="Yes", choices=["Yes", "No"])
