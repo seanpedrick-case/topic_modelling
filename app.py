@@ -185,7 +185,7 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
                                 min_topic_size = min_docs_slider,
                                 nr_topics = max_topics_slider,
                                 zeroshot_topic_list = zero_shot_topics_lower,
-                                zeroshot_min_similarity = 0.7,
+                                zeroshot_min_similarity = 0.5,#0.7,
                                 representation_model=representation_model,
                                 verbose = True)
         
