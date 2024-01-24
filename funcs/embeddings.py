@@ -33,9 +33,10 @@ def make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_mo
         # If on CPU, don't resort to embedding models
         if low_resource_mode_opt == "Yes":
             print("Creating simplified 'sparse' embeddings based on TfIDF")
+
             embedding_model = make_pipeline(
             TfidfVectorizer(),
-            TruncatedSVD(2000, random_state=random_seed)
+            TruncatedSVD(100, random_state=random_seed)
             )
 
             # Fit the pipeline to the text data

@@ -128,21 +128,20 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
         umap_model = UMAP(n_neighbors=15, n_components=5, random_state=random_seed)
 
     elif low_resource_mode == "Yes":
-        print("Choosing low resource TF-IDF model")
+        print("Choosing low resource TF-IDF model.")
+
         embedding_model_pipe = make_pipeline(
                 TfidfVectorizer(),
                 TruncatedSVD(100) # 100 # To be compatible with zero shot, this needs to be lower than number of suggested topics
                 )
         embedding_model = embedding_model_pipe
 
-        umap_model = TruncatedSVD(n_components=3, random_state=random_seed)
-
-
+        umap_model = TruncatedSVD(n_components=5, random_state=random_seed)
 
     embeddings_out, reduced_embeddings = make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_model, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels)
 
 
-    vectoriser_model = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=0.1)
+    vectoriser_model = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=0.05, max_df=0.9)
     
     from funcs.prompts import capybara_prompt, capybara_start, open_hermes_prompt, open_hermes_start, stablelm_prompt, stablelm_start
     from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag
@@ -241,10 +240,14 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
 
     if return_intermediate_files == "Yes":
         print("Saving embeddings to file")
-        semantic_search_file_name = data_file_name_no_ext + '_' + 'embeddings.npz'
-        np.savez_compressed(semantic_search_file_name, embeddings_out)
+        if low_resource_mode == "Yes":
+            embeddings_file_name = data_file_name_no_ext + '_' + 'tfidf_embeddings.npz'
+        else:
+            embeddings_file_name = data_file_name_no_ext + '_' + 'ai_embeddings.npz'
 
-        output_list.append(semantic_search_file_name)
+        np.savez_compressed(embeddings_file_name, embeddings_out)
+
+        output_list.append(embeddings_file_name)
 
     if visualise_topics == "Yes":
         # Visualise the topics:
