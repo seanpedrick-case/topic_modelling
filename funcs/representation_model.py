@@ -168,7 +168,7 @@ def create_representation_model(create_llm_topic_labels, llm_config, hf_model_na
         # All representation models
         representation_model = {
         "KeyBERT": keybert,
-        "Mistral": llm_model
+        "Phi": llm_model
         }
 
     elif create_llm_topic_labels == "No":
