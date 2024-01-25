@@ -5,6 +5,7 @@ import pandas as pd
 import gradio as gr
 import gzip
 import pickle
+import numpy as np
 
 
 def detect_file_type(filename):
@@ -62,8 +63,9 @@ def put_columns_in_df(in_file, in_bm25_column):
 
 
     concat_choices.extend(new_choices)     
-        
-    return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df
+    
+    #The np.array([]) at the end is for clearing the embedding state when a new file is loaded
+    return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df, np.array([])
 
 def get_file_path_end(file_path):
     # First, get the basename of the file (e.g., "example.txt" from "/path/to/example.txt")

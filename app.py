@@ -80,8 +80,8 @@ hf_model_name =  'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1
 hf_model_file =   'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf' # 'stablelm-2-zephyr-1_6b-Q5_K_M.gguf'
 
 
-def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels, save_topic_model, visualise_topics, reduce_outliers):
-    
+def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels, save_topic_model, visualise_topics, reduce_outliers, embeddings_out):
+
     all_tic = time.perf_counter()
 
     output_list = []
@@ -144,7 +144,7 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
 
         umap_model = TruncatedSVD(n_components=5, random_state=random_seed)
 
-    embeddings_out, reduced_embeddings = make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embedding_model, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels)
+    embeddings_out, reduced_embeddings = make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embeddings_out, embedding_model, return_intermediate_files, embeddings_super_compress, low_resource_mode, create_llm_topic_labels)
 
     vectoriser_model = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=0.1)
     
@@ -272,12 +272,16 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
         zip_folder(topic_model_save_name_folder, topic_model_save_name_zip)
         output_list.append(topic_model_save_name_zip)
 
+     # If you want to save your embedding files
     if return_intermediate_files == "Yes":
         print("Saving embeddings to file")
         if low_resource_mode == "Yes":
             embeddings_file_name = data_file_name_no_ext + '_' + 'tfidf_embeddings.npz'
         else:
-            embeddings_file_name = data_file_name_no_ext + '_' + 'ai_embeddings.npz'
+            if embeddings_super_compress == "No":
+                embeddings_file_name = data_file_name_no_ext + '_' + 'ai_embeddings.npz'
+            else:
+                embeddings_file_name = data_file_name_no_ext + '_' + 'ai_embedding_compress.npz'
 
         np.savez_compressed(embeddings_file_name, embeddings_out)
 
@@ -297,15 +301,13 @@ def extract_topics(in_files, in_file, min_docs_slider, in_colnames, max_topics_s
         time_out = f"All processes took {all_toc - all_tic:0.1f} seconds"
         print(time_out)
 
-        return output_text, output_list, topics_vis
+        return output_text, output_list, topics_vis, embeddings_out
 
     all_toc = time.perf_counter()
     time_out = f"All processes took {all_toc - all_tic:0.1f} seconds"
     print(time_out)
 
-    return output_text, output_list, None
-
-# , topic_model_save_name
+    return output_text, output_list, None, embeddings_out
 
 # ## Gradio app - extract topics
 
@@ -314,6 +316,7 @@ block = gr.Blocks(theme = gr.themes.Base())
 with block:
 
     data_state = gr.State(pd.DataFrame())
+    embeddings_state = gr.State(np.array([]))
  
     gr.Markdown(
     """
@@ -359,10 +362,10 @@ with block:
                 visualise_topics = gr.Dropdown(label = "Create a visualisation to map topics.", value="No", choices=["Yes", "No"])
 
     # Update column names dropdown when file uploaded
-    in_files.upload(fn=put_columns_in_df, inputs=[in_files], outputs=[in_colnames, in_label, data_state])    
+    in_files.upload(fn=put_columns_in_df, inputs=[in_files], outputs=[in_colnames, in_label, data_state, embeddings_state])    
     in_colnames.change(dummy_function, in_colnames, None)
 
-    topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embedding_super_compress, low_resource_mode_opt, create_llm_topic_labels, save_topic_model, visualise_topics, reduce_outliers], outputs=[output_single_text, output_file, plot], api_name="topics")
+    topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embedding_super_compress, low_resource_mode_opt, create_llm_topic_labels, save_topic_model, visualise_topics, reduce_outliers, embeddings_state], outputs=[output_single_text, output_file, plot, embeddings_state], api_name="topics")
 
 block.queue().launch(debug=True)#, server_name="0.0.0.0", ssl_verify=False, server_port=7860)
 
