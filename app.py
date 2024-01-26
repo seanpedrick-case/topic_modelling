@@ -4,7 +4,8 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 import time
-#from sklearn.cluster import KMeans
+
+from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 from transformers import AutoModel, AutoTokenizer
 from transformers.pipelines import pipeline
@@ -80,9 +81,10 @@ def read_logs():
 
 # Pinning a Jina revision for security purposes: https://www.baseten.co/blog/pinning-ml-model-revisions-for-compatibility-and-security/
 # Save Jina model locally as described here: https://huggingface.co/jinaai/jina-embeddings-v2-base-en/discussions/29
-embeddings_name = "jinaai/jina-embeddings-v2-small-en"
+embeddings_name = "BAAI/bge-small-en-v1.5" #"jinaai/jina-embeddings-v2-base-en"
 # local_embeddings_location = "model/jina/"
-revision_choice = "b811f03af3d4d7ea72a7c25c802b21fc675a5d99"
+#revision_choice = "b811f03af3d4d7ea72a7c25c802b21fc675a5d99"
+#revision_choice = "69d43700292701b06c24f43b96560566a4e5ad1f"
 
 # Model used for representing topics
 hf_model_name =  'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF' # 'second-state/stablelm-2-zephyr-1.6b-GGUF'
@@ -182,15 +184,17 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
     print("Low resource mode: ", low_resource_mode)
 
     if low_resource_mode == "No":
-        print("Using high resource Jina transformer model")
-        try:
-            embedding_model = AutoModel.from_pretrained(embeddings_name, revision = revision_choice, trust_remote_code=True,device_map="auto")
-        except:
-            embedding_model = AutoModel.from_pretrained(embeddings_name, revision = revision_choice, trust_remote_code=True, device_map="auto", use_auth_token=os.environ["HF_TOKEN"])
+        print("Using high resource BGE transformer model")
+        
+        
 
-        tokenizer = AutoTokenizer.from_pretrained(embeddings_name)
-
-        embedding_model_pipe = pipeline("feature-extraction", model=embedding_model, tokenizer=tokenizer)
+        embedding_model = SentenceTransformer(embeddings_name)
+        #try:
+        #embedding_model = AutoModel.from_pretrained(embeddings_name, revision = revision_choice, trust_remote_code=True,device_map="auto") # For Jina
+        #except:
+        #     embedding_model = AutoModel.from_pretrained(embeddings_name)#, revision = revision_choice, trust_remote_code=True, device_map="auto", use_auth_token=os.environ["HF_TOKEN"])
+        #tokenizer = AutoTokenizer.from_pretrained(embeddings_name)
+        #embedding_model_pipe = pipeline("feature-extraction", model=embedding_model, tokenizer=tokenizer)
 
         # UMAP model uses Bertopic defaults
         umap_model = UMAP(n_neighbors=15, n_components=5, min_dist=0.0, metric='cosine', low_memory=False, random_state=random_seed)
@@ -216,7 +220,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
 
     if not candidate_topics:
         
-        topic_model = BERTopic( embedding_model=embedding_model_pipe,
+        topic_model = BERTopic( embedding_model=embedding_model, #embedding_model_pipe, #for Jina
                                 vectorizer_model=vectoriser_model,
                                 umap_model=umap_model,
                                 min_topic_size = min_docs_slider,
@@ -237,7 +241,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
         zero_shot_topics = read_file(candidate_topics.name)
         zero_shot_topics_lower = list(zero_shot_topics.iloc[:, 0].str.lower())
 
-        topic_model = BERTopic( embedding_model=embedding_model_pipe,
+        topic_model = BERTopic( embedding_model=embedding_model, #embedding_model_pipe, # for Jina
                                 vectorizer_model=vectoriser_model,
                                 umap_model=umap_model,
                                 min_topic_size = min_docs_slider,
@@ -248,7 +252,11 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
         
         topics_text, probs = topic_model.fit_transform(docs, embeddings_out)
 
-    if not topics_text:
+        print(topics_text)
+
+    if topics_text.size == 0:
+    # Handle the empty array case
+
         return "No topics found.", data_file_name, None, embeddings_out, data_file_name_no_ext, topic_model, docs, label_list
         
     else: 
@@ -264,9 +272,9 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
             embeddings_file_name = data_file_name_no_ext + '_' + 'tfidf_embeddings.npz'
         else:
             if embeddings_super_compress == "No":
-                embeddings_file_name = data_file_name_no_ext + '_' + 'jina_embeddings.npz'
+                embeddings_file_name = data_file_name_no_ext + '_' + 'bge_embeddings.npz'
             else:
-                embeddings_file_name = data_file_name_no_ext + '_' + 'jina_embeddings_compress.npz'
+                embeddings_file_name = data_file_name_no_ext + '_' + 'bge_embeddings_compress.npz'
 
         np.savez_compressed(embeddings_file_name, embeddings_out)
 
@@ -464,7 +472,7 @@ with block:
     gr.Markdown(
     """
     # Topic modeller
-    Generate topics from open text in tabular data. Upload a file (csv, xlsx, or parquet), then specify the open text column that you want to use to generate topics, and another for labels in the visualisation. If you have an embeddings .npz file of the text made using the 'jina-embeddings-v2-small-en' model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available under the 'Options' tab.
+    Generate topics from open text in tabular data. Upload a file (csv, xlsx, or parquet), then specify the open text column that you want to use to generate topics, and another for labels in the visualisation. If you have an embeddings .npz file of the text made using the 'BAAI/bge-small-en-v1.5' model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available under the 'Options' tab.
 
     Suggested test dataset: https://huggingface.co/datasets/rag-datasets/mini_wikipedia/tree/main/data (passages.parquet)
     """)    
