@@ -94,8 +94,8 @@ def visualize_documents_custom(topic_model,
 
     # Add <br> tags to hover labels to get them to appear on multiple lines
     def wrap_by_word(s, n):
-        '''returns a string where \\n is inserted between every n words'''
-        a = s.split()
+        '''returns a string up to 300 words where \\n is inserted between every n words'''
+        a = s.split()[:300]
         ret = ''
         for i in range(0, len(a), n):
             ret += ' '.join(a[i:i+n]) + '<br>'

@@ -18,6 +18,8 @@ def detect_file_type(filename):
         return 'parquet'
     elif filename.endswith('.pkl.gz'):
         return 'pkl.gz'
+    elif filename.endswith('.pkl'):
+        return 'pkl'
     else:
         raise ValueError("Unsupported file type.")
 
@@ -37,6 +39,8 @@ def read_file(filename):
         with gzip.open(filename, 'rb') as file:
             file = pickle.load(file)
             #file = pd.read_pickle(filename)
+    elif file_type == 'pkl':
+        file = pickle.load(file)
 
     print("File load complete")
 
@@ -44,28 +48,37 @@ def read_file(filename):
 
 def put_columns_in_df(in_file, in_bm25_column):
     '''
-    When file is loaded, update the column dropdown choices and change 'clean data' dropdown option to 'no'.
+    When file is loaded, update the column dropdown choices and write to relevant data states.
     '''
+    new_choices = []
+    concat_choices = []
 
     file_list = [string.name for string in in_file]
 
-    data_file_names = [string.lower() for string in file_list if "npz" not in string.lower()]
-    data_file_name = data_file_names[0]
+    data_file_names = [string.lower() for string in file_list if "npz" not in string.lower() and "pkl" not in string.lower()]
+    if data_file_names:
+        data_file_name = data_file_names[0]
+        df = read_file(data_file_name)
 
+        new_choices = list(df.columns)
+        concat_choices.extend(new_choices)
+        output_text = "Data file loaded."
+    else:
+        error = "No data file provided."
+        print(error)
+        output_text = error
 
-    new_choices = []
-    concat_choices = []
-    
-    
-    df = read_file(data_file_name)
+    model_file_names = [string.lower() for string in file_list if "pkl" in string.lower()]
+    if model_file_names:
+        model_file_name = model_file_names[0]
+        topic_model = read_file(model_file_name)
+        output_text = "Bertopic model loaded in" 
+        
 
-    new_choices = list(df.columns)
-
-
-    concat_choices.extend(new_choices)     
+        return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df, np.array([]), output_text, topic_model
     
     #The np.array([]) at the end is for clearing the embedding state when a new file is loaded
-    return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df, np.array([])
+    return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df, np.array([]), output_text, None
 
 def get_file_path_end(file_path):
     # First, get the basename of the file (e.g., "example.txt" from "/path/to/example.txt")

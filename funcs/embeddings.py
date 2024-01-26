@@ -13,7 +13,7 @@ if cuda.is_available():
 else: 
     torch_device =  "cpu"
 
-def make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embeddings_out, embedding_model, return_intermediate_files, embeddings_super_compress, low_resource_mode_opt, reduce_embeddings="Yes"):
+def make_or_load_embeddings(docs, file_list, embeddings_out, embedding_model, embeddings_super_compress, low_resource_mode_opt):
 
     # If no embeddings found, make or load in
     if embeddings_out.size == 0:
@@ -65,16 +65,9 @@ def make_or_load_embeddings(docs, file_list, data_file_name_no_ext, embeddings_o
                 embeddings_out = np.round(embeddings_out, 3) 
                 embeddings_out *= 100
 
+        return embeddings_out, None
+
     else:
         print("Found pre-loaded embeddings.")
 
-    # Pre-reduce embeddings for visualisation purposes
-    if reduce_embeddings == "Yes":
-        if low_resource_mode_opt == "No":
-            reduced_embeddings = UMAP(n_neighbors=15, n_components=2, min_dist=0.0, metric='cosine', random_state=random_seed).fit_transform(embeddings_out)
-            return embeddings_out, reduced_embeddings
-        else:
-            reduced_embeddings = TruncatedSVD(2, random_state=random_seed).fit_transform(embeddings_out)
-            return embeddings_out, reduced_embeddings
-
-    return embeddings_out, None
+        return embeddings_out, None

@@ -8,6 +8,7 @@
 *.safetensors
 *.json
 *.html
+*.log
 .ipynb_checkpoints/*
 old_code/*
 model/*
