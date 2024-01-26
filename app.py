@@ -252,7 +252,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
         
         topics_text, probs = topic_model.fit_transform(docs, embeddings_out)
 
-        print(topics_text)
+       # print(topics_text)
 
     if topics_text.size == 0:
     # Handle the empty array case
@@ -504,7 +504,7 @@ with block:
                 reduce_outliers_btn = gr.Button("Reduce outliers")
                 represent_llm_btn = gr.Button("Generate topic labels with LLMs")
 
-        logs = gr.Textbox(label="Processing logs.")
+        #logs = gr.Textbox(label="Processing logs.")
         
       
 
@@ -539,7 +539,7 @@ with block:
 
     plot_btn.click(fn=visualise_topics, inputs=[topic_model_state, docs_state, data_file_name_no_ext_state, low_resource_mode_opt, embeddings_state, label_list_state, sample_slide, visualisation_type_radio], outputs=[output_single_text, out_plot_file, plot], api_name="plot")
 
-    block.load(read_logs, None, logs, every=5)
+    #block.load(read_logs, None, logs, every=5)
 
 block.queue().launch(debug=True)#, server_name="0.0.0.0", ssl_verify=False, server_port=7860)
 
