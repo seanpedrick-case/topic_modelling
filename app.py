@@ -130,7 +130,7 @@ def save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, sa
 
         return output_list, output_text
 
-def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embeddings_super_compress, low_resource_mode, save_topic_model, embeddings_out, progress=gr.Progress()):
+def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embeddings_super_compress, low_resource_mode, save_topic_model, embeddings_out, zero_shot_similarity, progress=gr.Progress()):
 
     progress(0, desc= "Loading data")
 
@@ -243,7 +243,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
                                 min_topic_size = min_docs_slider,
                                 nr_topics = max_topics_slider,
                                 zeroshot_topic_list = zero_shot_topics_lower,
-                                zeroshot_min_similarity = 0.6, # 0.7
+                                zeroshot_min_similarity = zero_shot_similarity, # 0.7
                                 verbose = True)
         
         topics_text, probs = topic_model.fit_transform(docs, embeddings_out)
@@ -478,7 +478,8 @@ with block:
 
         with gr.Accordion("I have my own list of topics (zero shot topic modelling).", open = False):
             candidate_topics = gr.File(label="Input topics from file (csv). File should have at least one column with a header and topic keywords in cells below. Topics will be taken from the first column of the file. Currently not compatible with low-resource embeddings.")
-            
+            zero_shot_similarity = gr.Slider(minimum = 0.5, maximum = 1, value = 0.65, step = 0.001, label = "Minimum similarity value for document to be assigned to zero-shot topic.")
+
         with gr.Row():
             min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 15, step = 1, label = "Minimum number of similar documents needed to make a topic.")
             max_topics_slider = gr.Slider(minimum = 2, maximum = 500, value = 10, step = 1, label = "Maximum number of topics")
@@ -522,7 +523,7 @@ with block:
     in_files.upload(fn=put_columns_in_df, inputs=[in_files], outputs=[in_colnames, in_label, data_state, embeddings_state, output_single_text, topic_model_state])    
     in_colnames.change(dummy_function, in_colnames, None)
 
-    topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embedding_super_compress, low_resource_mode_opt, save_topic_model, embeddings_state], outputs=[output_single_text, output_file, plot, embeddings_state, data_file_name_no_ext_state, topic_model_state, docs_state, label_list_state], api_name="topics")
+    topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, in_label, anonymise_drop, return_intermediate_files, embedding_super_compress, low_resource_mode_opt, save_topic_model, embeddings_state, zero_shot_similarity], outputs=[output_single_text, output_file, plot, embeddings_state, data_file_name_no_ext_state, topic_model_state, docs_state, label_list_state], api_name="topics")
 
     reduce_outliers_btn.click(fn=reduce_outliers, inputs=[topic_model_state, docs_state, embeddings_state, data_file_name_no_ext_state, low_resource_mode_opt], outputs=[output_single_text, output_file, embeddings_state], api_name="reduce_outliers")
 
