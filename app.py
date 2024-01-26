@@ -119,7 +119,7 @@ def save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, sa
             topic_model_save_name_zip = topic_model_save_name_pkl + ".zip"
 
             # Clear folder before replacing files
-            delete_files_in_folder(topic_model_save_name_pkl)
+            #delete_files_in_folder(topic_model_save_name_pkl)
 
             topic_model.save(topic_model_save_name_pkl, serialization='pickle', save_embedding_model=False, save_ctfidf=False)
 
@@ -417,6 +417,15 @@ def visualise_topics(topic_model, docs, data_file_name_no_ext, low_resource_mode
         topics_vis_2.write_html(topics_vis_2_name)
         output_list.append(topics_vis_2_name)
 
+        # Save new hierarchical topic model to file
+        import pandas as pd
+        hierarchical_topics_name = data_file_name_no_ext + '_' + 'vis_hierarchy_topics' + today_rev + '.csv'
+        hierarchical_topics.to_csv(hierarchical_topics_name)
+        output_list.append(hierarchical_topics_name)
+        #output_list, output_text = save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model)
+
+    
+
     all_toc = time.perf_counter()
     time_out = f"Creating visualisation took {all_toc - vis_tic:0.1f} seconds"
     print(time_out)
@@ -491,9 +500,10 @@ with block:
       
 
     with gr.Tab("Visualise"):
-        plot_btn = gr.Button("Visualise topic model")
+        
         sample_slide = gr.Slider(minimum = 0.01, maximum = 1, value = 0.1, step = 0.01, label = "Proportion of data points to show on output visualisation.")
         visualisation_type_radio = gr.Radio(choices=["Topic document graph", "Hierarchical view"])
+        plot_btn = gr.Button("Visualise topic model")
         out_plot_file = gr.File(label="Output plots to file", file_count="multiple")
         plot = gr.Plot(label="Visualise your topics here. Go to the 'Options' tab to enable.")
     
