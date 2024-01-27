@@ -129,7 +129,7 @@ def find_model_file(hf_model_name, hf_model_file, search_folder):
 
         print("Downloading model to: ", hf_home_value)
        
-        hf_hub_download(repo_id=hf_model_name, filename='phi-2-orange.Q5_K_M.gguf', cache_dir=hf_home_value)
+        hf_hub_download(repo_id=hf_model_name, filename=hf_model_file, cache_dir=hf_home_value)
 
         found_file = find_file(hf_home_value, file_to_find)
         return found_file
@@ -141,7 +141,7 @@ def create_representation_model(create_llm_topic_labels, llm_config, hf_model_na
         # Use llama.cpp to load in model
 
         # This was for testing on systems without a HF_HOME env variable
-        os.unsetenv("HF_HOME") 
+        #os.unsetenv("HF_HOME") 
 
         #if "HF_HOME" in os.environ:
         #    del os.environ["HF_HOME"]     
@@ -168,7 +168,7 @@ def create_representation_model(create_llm_topic_labels, llm_config, hf_model_na
         # All representation models
         representation_model = {
         "KeyBERT": keybert,
-        "Phi": llm_model
+        "LLM": llm_model
         }
 
     elif create_llm_topic_labels == "No":

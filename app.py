@@ -87,8 +87,8 @@ embeddings_name = "BAAI/bge-small-en-v1.5" #"jinaai/jina-embeddings-v2-base-en"
 #revision_choice = "69d43700292701b06c24f43b96560566a4e5ad1f"
 
 # Model used for representing topics
-hf_model_name =  'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF' # 'second-state/stablelm-2-zephyr-1.6b-GGUF'
-hf_model_file =   'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf' # 'stablelm-2-zephyr-1_6b-Q5_K_M.gguf'
+hf_model_name =  'second-state/stablelm-2-zephyr-1.6b-GGUF' #'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF' # 'second-state/stablelm-2-zephyr-1.6b-GGUF'
+hf_model_file =   'stablelm-2-zephyr-1_6b-Q5_K_M.gguf' # 'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf' # 'stablelm-2-zephyr-1_6b-Q5_K_M.gguf'
 
 def save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model, progress=gr.Progress()):
         topic_dets = topic_model.get_topic_info()
@@ -227,7 +227,15 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
                                 nr_topics = max_topics_slider,
                                 verbose = True)
 
-        topics_text, probs = topic_model.fit_transform(docs, embeddings_out)   
+        topics_text, probs = topic_model.fit_transform(docs, embeddings_out)
+
+        if not topics_text:
+        # Handle the empty array case
+
+            return "No topics found.", data_file_name, None, embeddings_out, data_file_name_no_ext, topic_model, docs, label_list
+        
+        else: 
+            print("Topic model created.")
 
 
     # Do this if you have pre-defined topics
@@ -254,13 +262,13 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
 
        # print(topics_text)
 
-    if topics_text.size == 0:
-    # Handle the empty array case
+        if topics_text.size == 0:
+        # Handle the empty array case
 
-        return "No topics found.", data_file_name, None, embeddings_out, data_file_name_no_ext, topic_model, docs, label_list
+            return "No topics found.", data_file_name, None, embeddings_out, data_file_name_no_ext, topic_model, docs, label_list
         
-    else: 
-        print("Topic model created.")
+        else: 
+            print("Topic model created.")
 
     # Outputs
     output_list, output_text = save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model)
@@ -319,8 +327,8 @@ def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, lo
     topic_dets = topic_model.get_topic_info()
 
     # Replace original labels with LLM labels
-    if "Phi" in topic_model.get_topic_info().columns:
-        llm_labels = [label[0][0].split("\n")[0] for label in topic_model.get_topics(full=True)["Phi"].values()]
+    if "LLM" in topic_model.get_topic_info().columns:
+        llm_labels = [label[0][0].split("\n")[0] for label in topic_model.get_topics(full=True)["LLM"].values()]
         topic_model.set_topic_labels(llm_labels)
     else:
         topic_model.set_topic_labels(list(topic_dets["Name"]))
@@ -355,14 +363,14 @@ def represent_topics(topic_model, docs, embeddings_out, data_file_name_no_ext, l
     topic_model.update_topics(docs, topics=topics_text, vectorizer_model=vectoriser_model, representation_model=representation_model)
 
     # Replace original labels with LLM labels
-    if "Phi" in topic_model.get_topic_info().columns:
-        llm_labels = [label[0][0].split("\n")[0] for label in topic_model.get_topics(full=True)["Phi"].values()]
+    if "LLM" in topic_model.get_topic_info().columns:
+        llm_labels = [label[0][0].split("\n")[0] for label in topic_model.get_topics(full=True)["LLM"].values()]
         topic_model.set_topic_labels(llm_labels)
 
-        with open('llm_topic_list.txt', 'w') as file:
+        with open('llm_topic_list.csv', 'w') as file:
             for item in llm_labels:
                 file.write(f"{item}\n")
-        output_list.append('llm_topic_list.txt')
+        output_list.append('llm_topic_list.csv')
     else:
         topic_model.set_topic_labels(list(topic_dets["Name"]))
 
@@ -386,8 +394,8 @@ def visualise_topics(topic_model, docs, data_file_name_no_ext, low_resource_mode
     topic_dets = topic_model.get_topic_info()
 
     # Replace original labels with LLM labels
-    if "Phi" in topic_model.get_topic_info().columns:
-        llm_labels = [label[0][0].split("\n")[0] for label in topic_model.get_topics(full=True)["Phi"].values()]
+    if "LLM" in topic_model.get_topic_info().columns:
+        llm_labels = [label[0][0].split("\n")[0] for label in topic_model.get_topics(full=True)["LLM"].values()]
         topic_model.set_topic_labels(llm_labels)
     else:
         topic_model.set_topic_labels(list(topic_dets["Name"]))
