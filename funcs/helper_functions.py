@@ -195,7 +195,14 @@ def save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, sa
         # Save topic model to file
         if save_topic_model == "Yes":
             print("Saving BERTopic model in .pkl format.")
-            topic_model_save_name_pkl = "output_model/" + data_file_name_no_ext + "_topics_" + today_rev + ".pkl"# + ".safetensors"
+
+            folder_path = "output_model/"
+
+            if not os.path.exists(folder_path):
+                # Create the folder
+                os.makedirs(folder_path)
+
+            topic_model_save_name_pkl = folder_path + data_file_name_no_ext + "_topics_" + today_rev + ".pkl"# + ".safetensors"
             topic_model_save_name_zip = topic_model_save_name_pkl + ".zip"
 
             # Clear folder before replacing files
