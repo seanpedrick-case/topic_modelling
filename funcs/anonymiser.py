@@ -1,7 +1,6 @@
 from spacy.cli import download
 import spacy
 spacy.prefer_gpu()
-import os
 
 def spacy_model_installed(model_name):
     try:

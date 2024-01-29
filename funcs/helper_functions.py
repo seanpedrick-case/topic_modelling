@@ -6,6 +6,11 @@ import gradio as gr
 import gzip
 import pickle
 import numpy as np
+from bertopic import BERTopic
+from datetime import datetime
+
+today = datetime.now().strftime("%d%m%Y")
+today_rev = datetime.now().strftime("%Y%m%d")
 
 
 def detect_file_type(filename):
@@ -20,6 +25,8 @@ def detect_file_type(filename):
         return 'pkl.gz'
     elif filename.endswith('.pkl'):
         return 'pkl'
+    elif filename.endswith('.npz'):
+        return 'npz'
     else:
         raise ValueError("Unsupported file type.")
 
@@ -30,35 +37,45 @@ def read_file(filename):
     print("Loading in file")
 
     if file_type == 'csv':
-        file = pd.read_csv(filename, low_memory=False).reset_index().drop(["index", "Unnamed: 0"], axis=1, errors="ignore")
+        file = pd.read_csv(filename, low_memory=False)#.reset_index().drop(["index", "Unnamed: 0"], axis=1, errors="ignore")
     elif file_type == 'xlsx':
-        file = pd.read_excel(filename).reset_index().drop(["index", "Unnamed: 0"], axis=1, errors="ignore")
+        file = pd.read_excel(filename)#.reset_index().drop(["index", "Unnamed: 0"], axis=1, errors="ignore")
     elif file_type == 'parquet':
-        file = pd.read_parquet(filename).reset_index().drop(["index", "Unnamed: 0"], axis=1, errors="ignore")
+        file = pd.read_parquet(filename)#.reset_index().drop(["index", "Unnamed: 0"], axis=1, errors="ignore")
     elif file_type == 'pkl.gz':
         with gzip.open(filename, 'rb') as file:
             file = pickle.load(file)
             #file = pd.read_pickle(filename)
     elif file_type == 'pkl':
-        file = pickle.load(file)
+        file = BERTopic.load(filename)
+    elif file_type == 'npz':
+        file = np.load(filename)['arr_0']
+
+        # If embedding files have 'super_compress' in the title, they have been multiplied by 100 before save
+        if "compress" in filename:
+            file /= 100
 
     print("File load complete")
 
     return file
 
-def put_columns_in_df(in_file, in_bm25_column):
+def initial_file_load(in_file):
     '''
     When file is loaded, update the column dropdown choices and write to relevant data states.
     '''
     new_choices = []
     concat_choices = []
+    custom_labels = pd.DataFrame()
+    topic_model = None
+    embeddings = np.array([])
 
     file_list = [string.name for string in in_file]
 
-    data_file_names = [string.lower() for string in file_list if "npz" not in string.lower() and "pkl" not in string.lower()]
+    data_file_names = [string.lower() for string in file_list if "npz" not in string.lower() and "pkl" not in string.lower() and "topic_list.csv" not in string.lower()]
     if data_file_names:
         data_file_name = data_file_names[0]
         df = read_file(data_file_name)
+        data_file_name_no_ext = get_file_path_end(data_file_name)
 
         new_choices = list(df.columns)
         concat_choices.extend(new_choices)
@@ -72,13 +89,23 @@ def put_columns_in_df(in_file, in_bm25_column):
     if model_file_names:
         model_file_name = model_file_names[0]
         topic_model = read_file(model_file_name)
-        output_text = "Bertopic model loaded in" 
-        
+        output_text = "Bertopic model loaded."
 
-        return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df, np.array([]), output_text, topic_model
-    
+    embedding_file_names = [string.lower() for string in file_list if "npz" in string.lower()]
+    if embedding_file_names:
+        embedding_file_name = embedding_file_names[0]
+        embeddings = read_file(embedding_file_name)
+        output_text = "Embeddings loaded."
+
+    label_file_names = [string.lower() for string in file_list if "topic_list" in string.lower()]
+    if label_file_names:
+        label_file_name = label_file_names[0]
+        custom_labels = read_file(label_file_name)
+        output_text = "Labels loaded." 
+   
+        
     #The np.array([]) at the end is for clearing the embedding state when a new file is loaded
-    return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df, np.array([]), output_text, None
+    return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df, output_text, topic_model, embeddings, data_file_name_no_ext, custom_labels
 
 def get_file_path_end(file_path):
     # First, get the basename of the file (e.g., "example.txt" from "/path/to/example.txt")
@@ -135,3 +162,50 @@ def delete_files_in_folder(folder_path):
                 print(f"Skipping {file_path} as it is a directory")
         except Exception as e:
             print(f"Failed to delete {file_path}. Reason: {e}")
+
+
+def save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model, progress=gr.Progress()):
+        
+        progress(0.7, desc= "Checking data")
+
+        topic_dets = topic_model.get_topic_info()
+
+        if topic_dets.shape[0] == 1:
+            topic_det_output_name = "topic_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
+            topic_dets.to_csv(topic_det_output_name)
+            output_list.append(topic_det_output_name)
+
+            return output_list, "No topics found, original file returned"
+
+        
+        progress(0.8, desc= "Saving output")
+        
+        topic_det_output_name = "topic_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
+        topic_dets.to_csv(topic_det_output_name)
+        output_list.append(topic_det_output_name)
+
+        doc_det_output_name = "doc_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
+        doc_dets = topic_model.get_document_info(docs)[["Document",	"Topic", "Name", "Probability", "Representative_document"]]
+        doc_dets.to_csv(doc_det_output_name)
+        output_list.append(doc_det_output_name)
+
+        topics_text_out_str = str(topic_dets["Name"])
+        output_text = "Topics: " + topics_text_out_str
+    
+        # Save topic model to file
+        if save_topic_model == "Yes":
+            print("Saving BERTopic model in .pkl format.")
+            topic_model_save_name_pkl = "output_model/" + data_file_name_no_ext + "_topics_" + today_rev + ".pkl"# + ".safetensors"
+            topic_model_save_name_zip = topic_model_save_name_pkl + ".zip"
+
+            # Clear folder before replacing files
+            #delete_files_in_folder(topic_model_save_name_pkl)
+
+            topic_model.save(topic_model_save_name_pkl, serialization='pickle', save_embedding_model=False, save_ctfidf=False)
+
+            # Zip file example
+            
+            #zip_folder(topic_model_save_name_pkl, topic_model_save_name_zip)
+            output_list.append(topic_model_save_name_pkl)
+
+        return output_list, output_text

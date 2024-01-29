@@ -4,7 +4,6 @@ from torch import cuda
 from sklearn.pipeline import make_pipeline
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
-from umap import UMAP
 
 random_seed = 42
 
@@ -20,13 +19,14 @@ def make_or_load_embeddings(docs, file_list, embeddings_out, embedding_model, em
         print("Embeddings not found. Loading or generating new ones.")
 
         embeddings_file_names = [string.lower() for string in file_list if "embedding" in string.lower()]  
-
+        
         if embeddings_file_names:
+            embeddings_file_name = embeddings_file_names[0]
             print("Loading embeddings from file.")
-            embeddings_out = np.load(embeddings_file_names[0])['arr_0']
+            embeddings_out = np.load(embeddings_file_name)['arr_0']
 
             # If embedding files have 'super_compress' in the title, they have been multiplied by 100 before save
-            if "compress" in embeddings_file_names[0]:
+            if "compress" in embeddings_file_name:
                 embeddings_out /= 100
 
         if not embeddings_file_names:
@@ -66,9 +66,9 @@ def make_or_load_embeddings(docs, file_list, embeddings_out, embedding_model, em
                 embeddings_out = np.round(embeddings_out, 3) 
                 embeddings_out *= 100
 
-        return embeddings_out, None
+        return embeddings_out
 
     else:
         print("Found pre-loaded embeddings.")
 
-        return embeddings_out, None
+        return embeddings_out

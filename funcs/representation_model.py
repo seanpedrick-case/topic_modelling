@@ -28,7 +28,7 @@ else:
     low_resource_mode = "Yes"
     n_gpu_layers = 0
 
-low_resource_mode = "No" # Override for testing
+#low_resource_mode = "No" # Override for testing
 
 #print("Running on device:", torch_device)
 n_threads = torch.get_num_threads()
