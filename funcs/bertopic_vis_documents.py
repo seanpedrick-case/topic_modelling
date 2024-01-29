@@ -160,9 +160,13 @@ def visualize_documents_custom(topic_model,
         names = ["_".join([label[0] for label in labels[:4]]) for labels in names]
         names = [label if len(label) < 30 else label[:27] + "..." for label in names]
     elif topic_model.custom_labels_ is not None and custom_labels:
+        print("Using custom labels: ", topic_model.custom_labels_)
         names = [topic_model.custom_labels_[topic + topic_model._outliers] for topic in unique_topics]
     else:
+        print("Not using custom labels")
         names = [f"{topic}_" + "_".join([word for word, value in topic_model.get_topic(topic)][:3]) for topic in unique_topics]
+
+    print(names)
 
     # Visualize
     fig = go.Figure()
@@ -192,6 +196,8 @@ def visualize_documents_custom(topic_model,
 
     # Selected topics
     for name, topic in zip(names, unique_topics):
+        #print(name)
+        #print(topic)
         if topic in topics and topic != -1:
             selection = df.loc[df.topic == topic, :]
             selection["text"] = ""
@@ -658,7 +664,7 @@ def visualize_barchart_custom(topic_model,
         subplot_titles = [topic_model.custom_labels_[topic + topic_model._outliers] for topic in topics]
     else:
         subplot_titles = [f"Topic {topic}" for topic in topics]
-    columns = 4
+    columns = 3
     rows = int(np.ceil(len(topics) / columns))
     fig = make_subplots(rows=rows,
                         cols=columns,
@@ -697,14 +703,14 @@ def visualize_barchart_custom(topic_model,
             'xanchor': 'center',
             'yanchor': 'top',
             'font': dict(
-                size=16,
+                size=14,
                 color="Black")
         },
         width=width*4,
         height=height*rows if rows > 1 else height * 1.3,
         hoverlabel=dict(
             bgcolor="white",
-            font_size=16,
+            font_size=14,
             font_family="Rockwell"
         ),
     )

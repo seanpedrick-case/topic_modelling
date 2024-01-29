@@ -253,13 +253,16 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
     else: 
         print("Topic model created.")
 
+    # Replace current topic labels if new ones loaded in
     if not custom_labels_df.empty:
-        #print(custom_labels_df.shape)
+        #custom_label_list = list(custom_labels_df.iloc[:,0])
+        custom_label_list = [label.replace("\n", "") for label in custom_labels_df.iloc[:,0]]
 
-        #topic_dets = topic_model.get_topic_info()
-        #print(topic_dets.shape)
+        topic_model.set_topic_labels(custom_label_list)
+        #topic_model.update_topics(docs, topics=assigned_topics, vectorizer_model=vectoriser_model)
 
-        topic_model.set_topic_labels(list(custom_labels_df.iloc[:,0]))
+        
+    print("Custom topics: ", topic_model.custom_labels_)
 
     # Outputs
     output_list, output_text = save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model)
@@ -384,7 +387,7 @@ def represent_topics(topic_model, docs, embeddings_out, data_file_name_no_ext, l
 
     return output_text, output_list, topic_model
 
-def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode,  embeddings_out, in_label, in_colnames, sample_prop, visualisation_type_radio, random_seed, progress=gr.Progress()):
+def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode,  embeddings_out, in_label, in_colnames, legend_label, sample_prop, visualisation_type_radio, random_seed, progress=gr.Progress()):
 
     progress(0, desc= "Preparing data for visualisation")
 
@@ -416,12 +419,13 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
 
     topic_dets = topic_model.get_topic_info()
 
-    # Replace original labels with LLM labels if they exist, or go with the 'Name' column
-    if "LLM" in topic_model.get_topic_info().columns:
-        llm_labels = [label[0][0].split("\n")[0] for label in topic_model.get_topics(full=True)["LLM"].values()]
-        topic_model.set_topic_labels(llm_labels)
-    else:
-        topic_model.set_topic_labels(list(topic_dets["Name"]))
+    # Replace original labels with another representation if specified
+    if legend_label:
+        topic_dets = topic_model.get_topics(full=True)
+        if legend_label in topic_dets:
+            labels = [topic_dets[legend_label].values()]
+            labels = [str(v) for v in labels]
+            topic_model.set_topic_labels(labels)
 
     # Pre-reduce embeddings for visualisation purposes
     if low_resource_mode == "No":
@@ -560,9 +564,11 @@ with block:
 
     with gr.Tab("Visualise"):
         with gr.Row():
-            in_label = gr.Dropdown(choices=["Choose a column"], multiselect = True, label="Select column for labelling documents in output visualisations.")
             visualisation_type_radio = gr.Radio(label="Visualisation type", choices=["Topic document graph", "Hierarchical view"])
+            in_label = gr.Dropdown(choices=["Choose a column"], multiselect = True, label="Select column for labelling documents in output visualisations.")
         sample_slide = gr.Slider(minimum = 0.01, maximum = 1, value = 0.1, step = 0.01, label = "Proportion of data points to show on output visualisations.")
+        legend_label = gr.Textbox(label="Custom legend column (optional, any column from the topic details output)", visible=False)
+            
         plot_btn = gr.Button("Visualise topic model")
         with gr.Row():
             vis_output_single_text = gr.Textbox(label="Visualisation output text")
@@ -595,7 +601,7 @@ with block:
 
     save_pytorch_btn.click(fn=save_as_pytorch_model, inputs=[topic_model_state, data_file_name_no_ext_state], outputs=[output_single_text, output_file])
 
-    plot_btn.click(fn=visualise_topics, inputs=[topic_model_state, data_state, data_file_name_no_ext_state, low_resource_mode_opt, embeddings_state, in_label, in_colnames, sample_slide, visualisation_type_radio, seed_number], outputs=[vis_output_single_text, out_plot_file, plot, plot_2], api_name="plot")
+    plot_btn.click(fn=visualise_topics, inputs=[topic_model_state, data_state, data_file_name_no_ext_state, low_resource_mode_opt, embeddings_state, in_label, in_colnames, legend_label, sample_slide, visualisation_type_radio, seed_number], outputs=[vis_output_single_text, out_plot_file, plot, plot_2], api_name="plot")
 
     #block.load(read_logs, None, logs, every=5)
 
