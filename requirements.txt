@@ -2,11 +2,14 @@ gradio==3.50.0
 transformers==4.37.1
 accelerate==0.26.1
 torch==2.1.2
-llama-cpp-python==0.2.33
+llama-cpp-python==0.2.36
 bertopic==0.16.0
 spacy==3.7.2
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1.tar.gz
 pyarrow==14.0.2
+openpyxl==3.1.2
 Faker==22.2.0
 presidio_analyzer==2.2.351
 presidio_anonymizer==2.2.351
 scipy==1.11.4
+polars==0.20.6

@@ -1,5 +1,6 @@
 from spacy.cli import download
 import spacy
+from funcs.presidio_analyzer_custom import analyze_dict
 spacy.prefer_gpu()
 
 def spacy_model_installed(model_name):
@@ -21,7 +22,7 @@ def spacy_model_installed(model_name):
 model_name = "en_core_web_sm"
 spacy_model_installed(model_name)
 
-spacy.load(model_name)
+#spacy.load(model_name)
 # Need to overwrite version of gradio present in Huggingface spaces as it doesn't have like buttons/avatars (Oct 2023)
 #os.system("pip uninstall -y gradio")
 #os.system("pip install gradio==3.50.0")
@@ -33,11 +34,10 @@ import base64
 import time
 
 import pandas as pd
-import gradio as gr
 
 from faker import Faker
 
-from presidio_analyzer import AnalyzerEngine, BatchAnalyzerEngine
+from presidio_analyzer import AnalyzerEngine, BatchAnalyzerEngine, PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine, BatchAnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
@@ -159,10 +159,24 @@ def read_file(filename):
 
 def anonymise_script(df, chosen_col, anon_strat):
 
+    #print(df.shape)
+
+    #df_chosen_col_mask = (df[chosen_col].isnull()) | (df[chosen_col].str.strip() == "")
+    #print("Length of input series blank at start is: ", df_chosen_col_mask.value_counts())
+
     # DataFrame to dict
     df_dict = pd.DataFrame(data={chosen_col:df[chosen_col].astype(str)}).to_dict(orient="list")
 
+    
+
     analyzer = AnalyzerEngine()
+
+    # Add titles to analyzer list
+    titles_recognizer = PatternRecognizer(supported_entity="TITLE",
+                                      deny_list=["Mr","Mrs","Miss", "Ms", "mr", "mrs", "miss", "ms"])
+
+    analyzer.registry.add_recognizer(titles_recognizer)
+
     batch_analyzer = BatchAnalyzerEngine(analyzer_engine=analyzer)
 
     anonymizer = AnonymizerEngine()
@@ -171,12 +185,13 @@ def anonymise_script(df, chosen_col, anon_strat):
 
     print("Identifying personal data")
     analyse_tic = time.perf_counter()
-    analyzer_results = batch_analyzer.analyze_dict(df_dict, language="en")
+    #analyzer_results = batch_analyzer.analyze_dict(df_dict, language="en")
+    analyzer_results = analyze_dict(batch_analyzer, df_dict, language="en")
     #print(analyzer_results)
     analyzer_results = list(analyzer_results)
 
     analyse_toc = time.perf_counter()
-    analyse_time_out = f"Cleaning the text took {analyse_toc - analyse_tic:0.1f} seconds."
+    analyse_time_out = f"Analysing the text took {analyse_toc - analyse_tic:0.1f} seconds."
     print(analyse_time_out)
 
     # Generate a 128-bit AES key. Then encode the key using base64 to get a string representation
@@ -206,15 +221,34 @@ def anonymise_script(df, chosen_col, anon_strat):
     if anon_strat == "encrypt": chosen_mask_config = people_encrypt_config
     elif anon_strat == "fake_first_name": chosen_mask_config = fake_first_name_config
 
-    # I think in general people will want to keep date / times
-    keep_date_config = eval('{"DATE_TIME": OperatorConfig("keep")}')
+    # I think in general people will want to keep date / times - NOT FOR TOPIC MODELLING
+    #keep_date_config = eval('{"DATE_TIME": OperatorConfig("keep")}')
 
-    combined_config = {**chosen_mask_config, **keep_date_config}
+    #combined_config = {**chosen_mask_config, **keep_date_config}
+    combined_config = {**chosen_mask_config}#, **keep_date_config}
     combined_config
 
+    print("Anonymising personal data")
     anonymizer_results = batch_anonymizer.anonymize_dict(analyzer_results, operators=combined_config)
 
-    scrubbed_df = pd.DataFrame(anonymizer_results)
+    #print(anonymizer_results)
+
+    scrubbed_df = pd.DataFrame(data={chosen_col:anonymizer_results[chosen_col]})
+
+    scrubbed_series = scrubbed_df[chosen_col]
+
+    #print(scrubbed_series[0:6])
+
+    #print("Length of output series is: ", len(scrubbed_series))
+    #print("Length of input series at end is: ", len(df[chosen_col]))
+
+    
+    #scrubbed_values_mask = (scrubbed_series.isnull()) | (scrubbed_series.str.strip() == "")
+    #df_chosen_col_mask = (df[chosen_col].isnull()) | (df[chosen_col].str.strip() == "")
+
+    #print("Length of input series blank at end is: ", df_chosen_col_mask.value_counts())
+    #print("Length of output series blank is: ", scrubbed_values_mask.value_counts())
+    
 
     # Create reporting message
     out_message = "Successfully anonymised"
@@ -222,7 +256,7 @@ def anonymise_script(df, chosen_col, anon_strat):
     if anon_strat == "encrypt":
         out_message = out_message + ". Your decryption key is " + key_string + "."
     
-    return scrubbed_df, out_message
+    return scrubbed_series, out_message
 
 def do_anonymise(in_file, anon_strat, chosen_cols):
     

@@ -1,3 +1,4 @@
+import sys
 import os
 import zipfile
 import re
@@ -11,6 +12,30 @@ from datetime import datetime
 
 today = datetime.now().strftime("%d%m%Y")
 today_rev = datetime.now().strftime("%Y%m%d")
+
+# Log terminal output: https://github.com/gradio-app/gradio/issues/2362
+class Logger:
+    def __init__(self, filename):
+        self.terminal = sys.stdout
+        self.log = open(filename, "w")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+        
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+        
+    def isatty(self):
+        return False    
+
+sys.stdout = Logger("output.log")
+
+def read_logs():
+    sys.stdout.flush()
+    with open("output.log", "r") as f:
+        return f.read()
 
 
 def detect_file_type(filename):
@@ -189,7 +214,10 @@ def save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, sa
         doc_dets.to_csv(doc_det_output_name)
         output_list.append(doc_det_output_name)
 
-        topics_text_out_str = str(topic_dets["Name"])
+        if "CustomName" in topic_dets.columns:
+            topics_text_out_str = str(topic_dets["CustomName"])
+        else:
+            topics_text_out_str = str(topic_dets["Name"])
         output_text = "Topics: " + topics_text_out_str
     
         # Save topic model to file
