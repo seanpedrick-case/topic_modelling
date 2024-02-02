@@ -181,7 +181,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
  
     progress(0.3, desc= "Embeddings loaded. Creating BERTopic model")
 
-    fail_error_message = "Topic model creation failed. If you have a small dataset, try reducing minimum documents per topic."
+    fail_error_message = "Topic model creation failed. Try reducing minimum documents per topic on the slider above (try 15 or less), then click 'Extract topics' again."
 
     if not candidate_topics:
         

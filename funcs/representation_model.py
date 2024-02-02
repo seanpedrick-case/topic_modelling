@@ -143,10 +143,12 @@ def create_representation_model(representation_type, llm_config, hf_model_name, 
 
         # Check for HF_HOME environment variable and supply a default value if it's not found (typical location for huggingface models)
         # Get HF_HOME environment variable or default to "~/.cache/huggingface/hub"
-        hf_home_value = os.getenv("HF_HOME", "~/.cache/huggingface/hub")
+        base_folder = "." #"~/.cache/huggingface/hub"
+        hf_home_value = os.getenv("HF_HOME", base_folder)
 
         # Expand the user symbol '~' to the full home directory path
-        hf_home_value = os.path.expanduser(hf_home_value)
+        if "~" in base_folder:
+            hf_home_value = os.path.expanduser(hf_home_value)
 
         # Check if the directory exists, create it if it doesn't
         if not os.path.exists(hf_home_value):
