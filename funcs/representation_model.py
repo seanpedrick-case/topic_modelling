@@ -127,7 +127,7 @@ def find_model_file(hf_model_name, hf_model_file, search_folder):
 
         print("Downloading model to: ", hf_home_value)
        
-        hf_hub_download(repo_id=hf_model_name, filename=hf_model_file, cache_dir=hf_home_value)
+        hf_hub_download(repo_id=hf_model_name, filename=hf_model_file, local_dir=hf_home_value)
 
         found_file = find_file(hf_home_value, file_to_find)
         return found_file
