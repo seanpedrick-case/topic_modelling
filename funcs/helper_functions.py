@@ -96,7 +96,7 @@ def initial_file_load(in_file):
 
     file_list = [string.name for string in in_file]
 
-    data_file_names = [string.lower() for string in file_list if "npz" not in string.lower() and "pkl" not in string.lower() and "topic_list.csv" not in string.lower()]
+    data_file_names = [string for string in file_list if "npz" not in string.lower() and "pkl" not in string.lower() and "topic_list.csv" not in string.lower()]
     if data_file_names:
         data_file_name = data_file_names[0]
         df = read_file(data_file_name)
@@ -110,19 +110,19 @@ def initial_file_load(in_file):
         print(error)
         output_text = error
 
-    model_file_names = [string.lower() for string in file_list if "pkl" in string.lower()]
+    model_file_names = [string for string in file_list if "pkl" in string.lower()]
     if model_file_names:
         model_file_name = model_file_names[0]
         topic_model = read_file(model_file_name)
         output_text = "Bertopic model loaded."
 
-    embedding_file_names = [string.lower() for string in file_list if "npz" in string.lower()]
+    embedding_file_names = [string for string in file_list if "npz" in string.lower()]
     if embedding_file_names:
         embedding_file_name = embedding_file_names[0]
         embeddings = read_file(embedding_file_name)
         output_text = "Embeddings loaded."
 
-    label_file_names = [string.lower() for string in file_list if "topic_list" in string.lower()]
+    label_file_names = [string for string in file_list if "topic_list" in string.lower()]
     if label_file_names:
         label_file_name = label_file_names[0]
         custom_labels = read_file(label_file_name)

@@ -18,7 +18,7 @@ def make_or_load_embeddings(docs, file_list, embeddings_out, embedding_model, em
     if embeddings_out.size == 0:
         print("Embeddings not found. Loading or generating new ones.")
 
-        embeddings_file_names = [string.lower() for string in file_list if "embedding" in string.lower()]  
+        embeddings_file_names = [string for string in file_list if "embedding" in string.lower()]  
         
         if embeddings_file_names:
             embeddings_file_name = embeddings_file_names[0]
