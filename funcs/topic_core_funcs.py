@@ -163,12 +163,12 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
         # UMAP model uses Bertopic defaults
         umap_model = UMAP(n_neighbors=15, n_components=5, min_dist=0.0, metric='cosine', low_memory=False, random_state=random_seed)
 
-    elif low_resource_mode == "Yes":
+    else:
         print("Choosing low resource TF-IDF model.")
 
         embedding_model_pipe = make_pipeline(
                 TfidfVectorizer(),
-                TruncatedSVD(100)
+                TruncatedSVD(100, random_state=random_seed)
                 )
         embedding_model = embedding_model_pipe
 
@@ -209,7 +209,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
             error_message = "Zero shot topic modelling currently not compatible with low-resource embeddings. Please change this option to 'No' on the options tab and retry."
             print(error_message)
 
-            return error_message, output_list, embeddings_out, data_file_name_no_ext, None, docs
+            return error_message, output_list, embeddings_out, data_file_name_no_ext, None, docs, vectoriser_model
 
         zero_shot_topics = read_file(candidate_topics.name)
         zero_shot_topics_lower = list(zero_shot_topics.iloc[:, 0].str.lower())

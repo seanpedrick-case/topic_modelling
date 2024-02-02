@@ -26,9 +26,9 @@ with block:
     gr.Markdown(
     """
     # Topic modeller
-    Generate topics from open text in tabular data, based on [BERTopic](https://maartengr.github.io/BERTopic/). Upload a data file (csv, xlsx, or parquet), then specify the open text column that you want to use to generate topics. Click 'Extract topics' after you have selected the minimum similar documents per topic and maximum total topics.
+    Generate topics from open text in tabular data, based on [BERTopic](https://maartengr.github.io/BERTopic/). Upload a data file (csv, xlsx, or parquet), then specify the open text column that you want to use to generate topics. Click 'Extract topics' after you have selected the minimum similar documents per topic and maximum total topics. Duplicate this space, or clone to your computer to avoid queues here!
     
-    Uses fast TF-IDF-based embeddings by default, change to 'BAAI/bge-small-en-v1.5' model embeddings on the options page. If you have an embeddings .npz file previously made using this model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics for zero-shot modelling, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available under the 'Options' tab.
+    Uses fast TF-IDF-based embeddings by default, which are fast but not very performant in terms of cluster. Change to [BAAI/bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) model embeddings on the options page for topics of much higher quality, but slower processing time. If you have an embeddings .npz file previously made using this model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics for zero-shot modelling, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available under the 'Options' tab. Topic representation with LLMs currently based on [StableLM-2-Zephyr-1.6B-GGUF](https://huggingface.co/second-state/stablelm-2-zephyr-1.6b-GGUF).
 
     I suggest [Wikipedia mini dataset](https://huggingface.co/datasets/rag-datasets/mini_wikipedia/tree/main/data) for testing the tool here, choose passages.parquet.
     """)    
@@ -51,8 +51,8 @@ with block:
             zero_shot_similarity = gr.Slider(minimum = 0.5, maximum = 1, value = 0.65, step = 0.001, label = "Minimum similarity value for document to be assigned to zero-shot topic.")
 
         with gr.Row():
-            min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 15, step = 1, label = "Minimum number of similar documents needed to make a topic.")
-            max_topics_slider = gr.Slider(minimum = 2, maximum = 500, value = 10, step = 1, label = "Maximum number of topics")
+            min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 5, step = 1, label = "Minimum number of similar documents needed to make a topic.")
+            max_topics_slider = gr.Slider(minimum = 2, maximum = 500, value = 50, step = 1, label = "Maximum number of topics")
 
         with gr.Row():
             topics_btn = gr.Button("Extract topics", variant="primary")
@@ -89,7 +89,7 @@ with block:
                 seed_number = gr.Number(label="Random seed to use for dimensionality reduction.", minimum=0, step=1, value=42, precision=0)
                 calc_probs = gr.Dropdown(label="Calculate all topic probabilities", value="No", choices=["Yes", "No"])
             with gr.Row():
-                low_resource_mode_opt = gr.Dropdown(label = "Use low resource embeddings and processing.", value="Yes", choices=["Yes", "No"])
+                low_resource_mode_opt = gr.Dropdown(label = "Use low resource (TF-IDF) embeddings and processing.", value="Yes", choices=["Yes", "No"])
                 embedding_super_compress = gr.Dropdown(label = "Round embeddings to three dp for smaller files with less accuracy.", value="No", choices=["Yes", "No"])
             with gr.Row(): 
                 return_intermediate_files = gr.Dropdown(label = "Return intermediate processing files from file preparation.", value="Yes", choices=["Yes", "No"])
