@@ -1,5 +1,6 @@
-# Dendrograms will not work with the latest version of scipy (1.12.0), so installing the version prior to be safe
-#os.system("pip install scipy==1.11.4")
+# Dendrograms will not work with the latest version of scipy (1.12.0), so run the following here/in your environment if you come across issues
+# import os
+# os.system("pip install scipy==1.11.4")
 
 import gradio as gr
 import pandas as pd
@@ -42,7 +43,7 @@ with block:
         with gr.Accordion("Clean data", open = False):
             with gr.Row():
                 clean_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Clean data - remove html, numbers with > 2 digits, emails, postcodes (UK).")
-                drop_duplicate_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove duplicate text, drop < 10 char strings. May make previous embedding files incompatible due to differing lengths.")
+                drop_duplicate_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove duplicate text, drop < 10 char strings. May make old embedding files incompatible due to differing lengths.")
                 anonymise_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Anonymise data on file load. Personal details are redacted - not 100% effective. This is slow!")                
             clean_btn = gr.Button("Clean data")
 

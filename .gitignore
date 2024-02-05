@@ -11,7 +11,12 @@
 *.json
 *.html
 *.log
+*.spec
 .ipynb_checkpoints/*
 old_code/*
 model/*
 output_model/*
+data/*
+build_deps/*
+dist/*
+build/*
