@@ -1,9 +1,6 @@
 import time
 import numpy as np
 from torch import cuda
-from sklearn.pipeline import make_pipeline
-from sklearn.decomposition import TruncatedSVD
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 random_seed = 42
 

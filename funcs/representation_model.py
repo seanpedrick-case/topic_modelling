@@ -3,7 +3,7 @@ from bertopic.representation import LlamaCPP
 from llama_cpp import Llama
 from pydantic import BaseModel
 import torch.cuda
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, snapshot_download
 
 from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, BaseRepresentation
 from funcs.prompts import capybara_prompt, capybara_start, open_hermes_prompt, open_hermes_start, stablelm_prompt, stablelm_start
@@ -119,17 +119,25 @@ def find_model_file(hf_model_name, hf_model_file, search_folder):
 
         # Specify your custom directory
         # Get HF_HOME environment variable or default to "~/.cache/huggingface/hub"
-        hf_home_value = search_folder
+        #hf_home_value = search_folder
 
         # Check if the directory exists, create it if it doesn't
-        if not os.path.exists(hf_home_value):
-            os.makedirs(hf_home_value)
+        #if not os.path.exists(hf_home_value):
+        #    os.makedirs(hf_home_value)
 
-        print("Downloading model to: ", hf_home_value)
+        
        
-        hf_hub_download(repo_id=hf_model_name, filename=hf_model_file, local_dir=hf_home_value) # cache_dir
+        found_file = hf_hub_download(repo_id=hf_model_name, filename=hf_model_file)#, local_dir=hf_home_value) # cache_dir
 
-        found_file = find_file(hf_home_value, file_to_find)
+        #path = snapshot_download(
+        #    repo_id=hf_model_name,
+        #    allow_patterns="config.json",
+        #    local_files_only=False
+        #)
+
+        print("Downloaded model to: ", found_file)
+
+        #found_file = find_file(path, file_to_find)
         return found_file
 
 
@@ -158,7 +166,7 @@ def create_representation_model(representation_type, llm_config, hf_model_name, 
 
         found_file = find_model_file(hf_model_name, hf_model_file,  hf_home_value)
 
-        llm = Llama(model_path=found_file, stop=chosen_start_tag, n_gpu_layers=llm_config.n_gpu_layers, n_ctx=llm_config.n_ctx, rope_freq_scale=0.5) #**llm_config.model_dump())# 
+        llm = Llama(model_path=found_file, stop=chosen_start_tag, n_gpu_layers=llm_config.n_gpu_layers, n_ctx=llm_config.n_ctx, rope_freq_scale=0.5, seed=seed) #**llm_config.model_dump())# 
         #print(llm.n_gpu_layers)
         llm_model = LlamaCPP(llm, prompt=chosen_prompt)#, **gen_config.model_dump())
 
