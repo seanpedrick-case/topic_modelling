@@ -132,6 +132,33 @@ def initial_file_load(in_file):
     #The np.array([]) at the end is for clearing the embedding state when a new file is loaded
     return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df, output_text, topic_model, embeddings, data_file_name_no_ext, custom_labels
 
+def custom_regex_load(in_file):
+    '''
+    When file is loaded, update the column dropdown choices and write to relevant data states.
+    '''
+
+    custom_regex = pd.DataFrame()
+
+    file_list = [string.name for string in in_file]
+
+    regex_file_names = [string for string in file_list if "csv" in string.lower()]
+    if regex_file_names:
+        regex_file_name = regex_file_names[0]
+        custom_regex = read_file(regex_file_name)
+        #regex_file_name_no_ext = get_file_path_end(regex_file_name)
+
+        output_text = "Data file loaded."
+        print(output_text)
+    else:
+        error = "No regex file provided."
+        print(error)
+        output_text = error
+        return custom_regex
+       
+    return custom_regex
+
+
+
 def get_file_path_end(file_path):
     # First, get the basename of the file (e.g., "example.txt" from "/path/to/example.txt")
     basename = os.path.basename(file_path)

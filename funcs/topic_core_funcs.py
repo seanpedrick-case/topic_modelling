@@ -51,7 +51,7 @@ embeddings_name = "BAAI/bge-small-en-v1.5" #"jinaai/jina-embeddings-v2-base-en"
 hf_model_name =  'second-state/stablelm-2-zephyr-1.6b-GGUF' #'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF'
 hf_model_file =   'stablelm-2-zephyr-1_6b-Q5_K_M.gguf' # 'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf'
 
-def pre_clean(data, in_colnames, data_file_name_no_ext, clean_text, drop_duplicate_text, anonymise_drop, progress=gr.Progress(track_tqdm=True)):
+def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text, drop_duplicate_text, anonymise_drop, progress=gr.Progress(track_tqdm=True)):
     
     output_text = ""
     output_list = []
@@ -76,7 +76,10 @@ def pre_clean(data, in_colnames, data_file_name_no_ext, clean_text, drop_duplica
 
         data_file_name_no_ext = data_file_name_no_ext + "_clean"
 
-        data[in_colnames_list_first] = initial_clean(data[in_colnames_list_first])
+        if not custom_regex.empty:
+            data[in_colnames_list_first] = initial_clean(data[in_colnames_list_first], custom_regex.iloc[:, 0].to_list())
+        else:
+            data[in_colnames_list_first] = initial_clean(data[in_colnames_list_first], [])
 
         clean_toc = time.perf_counter()
         clean_time_out = f"Cleaning the text took {clean_toc - clean_tic:0.1f} seconds."
@@ -90,7 +93,7 @@ def pre_clean(data, in_colnames, data_file_name_no_ext, clean_text, drop_duplica
         #print("Removing duplicates and short entries from data")
         #print("Data shape before: ", data.shape)
         data[in_colnames_list_first] = data[in_colnames_list_first].str.strip()
-        data = data[data[in_colnames_list_first].str.len() >= 10]
+        data = data[data[in_colnames_list_first].str.len() >= 50]
         data = data.drop_duplicates(subset = in_colnames_list_first).dropna(subset= in_colnames_list_first).reset_index()
         
         #print("Data shape after duplicate/null removal: ", data.shape)
@@ -197,6 +200,12 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
 
             assigned_topics, probs = topic_model.fit_transform(docs, embeddings_out)
 
+            if calc_probs == True:
+                topics_probs_out = pd.DataFrame(topic_model.probabilities_)
+                topics_probs_out_name = "topic_full_probs_" + data_file_name_no_ext + "_" + today_rev + ".csv"
+                topics_probs_out.to_csv(topics_probs_out_name)
+                output_list.append(topics_probs_out_name)
+
         except:
             print(fail_error_message)
 
@@ -227,6 +236,12 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
                                     verbose = True)
             
             assigned_topics, probs = topic_model.fit_transform(docs, embeddings_out)
+
+            if calc_probs == True:
+                topics_probs_out = pd.DataFrame(topic_model.probabilities_)
+                topics_probs_out_name = "topic_full_probs_" + data_file_name_no_ext + "_" + today_rev + ".csv"
+                topics_probs_out.to_csv(topics_probs_out_name)
+                output_list.append(topics_probs_out_name)
 
         except:
             print(fail_error_message)
@@ -312,18 +327,21 @@ def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, sa
     assigned_topics = topic_model.reduce_outliers(docs, assigned_topics, strategy="embeddings")
     # Then, update the topics to the ones that considered the new data
 
+    progress(0.6, desc= "Updating original model")
+    topic_model.update_topics(docs, topics=assigned_topics)
+
     print("Finished reducing outliers.")
 
-    progress(0.7, desc= "Replacing topic names with LLMs if necessary")
+    #progress(0.7, desc= "Replacing topic names with LLMs if necessary")
 
-    topic_dets = topic_model.get_topic_info()
+    #topic_dets = topic_model.get_topic_info()
 
-    # Replace original labels with LLM labels
-    if "LLM" in topic_model.get_topic_info().columns:
-        llm_labels = [label[0][0].split("\n")[0] for label in topic_model.get_topics(full=True)["LLM"].values()]
-        topic_model.set_topic_labels(llm_labels)
-    else:
-        topic_model.set_topic_labels(list(topic_dets["Name"]))
+    # # Replace original labels with LLM labels
+    # if "LLM" in topic_model.get_topic_info().columns:
+    #     llm_labels = [label[0][0].split("\n")[0] for label in topic_model.get_topics(full=True)["LLM"].values()]
+    #     topic_model.set_topic_labels(llm_labels)
+    # else:
+    #     topic_model.set_topic_labels(list(topic_dets["Name"]))
 
     # Outputs   
     progress(0.9, desc= "Saving to file")
@@ -447,6 +465,16 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
     elif visualisation_type_radio == "Hierarchical view":
 
         hierarchical_topics = topic_model.hierarchical_topics(docs)
+
+        # Print topic tree
+        tree = topic_model.get_topic_tree(hierarchical_topics, tight_layout = True)
+        tree_name = data_file_name_no_ext + '_' + 'vis_hierarchy_tree_' + today_rev + '.txt'
+
+        with open(tree_name, "w") as file:
+            # Write the string to the file
+            file.write(tree)
+
+        output_list.append(tree_name)
 
         # Save new hierarchical topic model to file
         hierarchical_topics_name = data_file_name_no_ext + '_' + 'vis_hierarchy_topics_' + today_rev + '.csv'
