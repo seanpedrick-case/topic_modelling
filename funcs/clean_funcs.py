@@ -42,17 +42,10 @@ def initial_clean(texts, custom_regex, progress=gr.Progress()):
     # Allow for custom regex patterns to be removed
     if len(custom_regex) > 0:
         for pattern in custom_regex:
-            text = text.str.replace_all(pattern, '')
+            raw_string_pattern = r'{}'.format(pattern)
+            print("Removing regex pattern: ", raw_string_pattern)
+            text = text.str.replace_all(raw_string_pattern, '')
 
-    #text = text.str.replace_all(warning_pattern_regex, '') # This one is quite particular to Lambeth emails
-    #text = text.str.replace_all(egress_pattern_regex, '')
-    #text = text.str.replace_all(r'(?i)2nd floor civic centre', '')
-    #text = text.str.replace_all(r'(?i)6 brixton hill', '')
-    #text = text.str.replace_all(r'(?i)\bsocial care\b', '')
-    #text = text.str.replace_all(r'(?i)\basc\b', '')
-    #text = text.str.replace_all(r'(?i)\bcsc\b', '')
-    #text = text.str.replace_all(r'(?i)\blambeth\b', '')
-    
     text = text.to_list()
     
     return text

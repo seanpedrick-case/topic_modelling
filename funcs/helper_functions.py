@@ -153,9 +153,9 @@ def custom_regex_load(in_file):
         error = "No regex file provided."
         print(error)
         output_text = error
-        return custom_regex
+        return error, custom_regex
        
-    return custom_regex
+    return output_text, custom_regex
 
 
 

@@ -18,6 +18,7 @@ with block:
 
     data_state = gr.State(pd.DataFrame())
     embeddings_state = gr.State(np.array([]))
+    embeddings_type_state = gr.State("")
     topic_model_state = gr.State()
     custom_regex_state = gr.State(pd.DataFrame())
     docs_state = gr.State()
@@ -43,12 +44,13 @@ with block:
 
         with gr.Accordion("Clean data", open = False):
             with gr.Row():
-                clean_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Clean data - remove html, numbers with > 1 digits, emails, postcodes (UK).")
+                clean_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Clean data - remove html, numbers with > 1 digits, emails, postcodes (UK), custom regex.")
                 drop_duplicate_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove duplicate text, drop < 50 char strings. May make old embedding files incompatible due to differing lengths.")
                 anonymise_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Anonymise data on file load. Personal details are redacted - not 100% effective. This is slow!")
             with gr.Row():
-                gr.Markdown("""Import custom regex - csv table with one column of raw text regex patterns with header. Example pattern: r'example'""")
-                custom_regex = gr.UploadButton(label="Import custom regex file", file_count="multiple")             
+                custom_regex = gr.UploadButton(label="Import custom regex file", file_count="multiple")    
+                gr.Markdown("""Import custom regex - csv table with one column of regex patterns with header. Example pattern: (?i)roosevelt for case insensitive removal of this term.""")
+                custom_regex_text = gr.Textbox(label="Custom regex load status")
             clean_btn = gr.Button("Clean data")
 
         with gr.Accordion("I have my own list of topics (zero shot topic modelling).", open = False):
@@ -105,11 +107,11 @@ with block:
     in_colnames.change(dummy_function, in_colnames, None)
 
     # Clean data
-    custom_regex.upload(fn=custom_regex_load, inputs=[custom_regex], outputs=[custom_regex_state])
+    custom_regex.upload(fn=custom_regex_load, inputs=[custom_regex], outputs=[custom_regex_text, custom_regex_state])
     clean_btn.click(fn=pre_clean, inputs=[data_state, in_colnames, data_file_name_no_ext_state, custom_regex_state, clean_text, drop_duplicate_text, anonymise_drop], outputs=[output_single_text, output_file, data_state, data_file_name_no_ext_state], api_name="clean")
 
     # Extract topics
-    topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, data_file_name_no_ext_state, label_list_state, return_intermediate_files, embedding_super_compress, low_resource_mode_opt, save_topic_model, embeddings_state, zero_shot_similarity, seed_number, calc_probs, vectoriser_state], outputs=[output_single_text, output_file, embeddings_state, data_file_name_no_ext_state, topic_model_state, docs_state, vectoriser_state], api_name="topics")
+    topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, data_file_name_no_ext_state, label_list_state, return_intermediate_files, embedding_super_compress, low_resource_mode_opt, save_topic_model, embeddings_state, embeddings_type_state, zero_shot_similarity, seed_number, calc_probs, vectoriser_state], outputs=[output_single_text, output_file, embeddings_state, embeddings_type_state, data_file_name_no_ext_state, topic_model_state, docs_state, vectoriser_state], api_name="topics")
 
     # Reduce outliers
     reduce_outliers_btn.click(fn=reduce_outliers, inputs=[topic_model_state, docs_state, embeddings_state, data_file_name_no_ext_state, save_topic_model], outputs=[output_single_text, output_file, topic_model_state], api_name="reduce_outliers")

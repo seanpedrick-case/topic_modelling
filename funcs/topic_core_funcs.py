@@ -126,7 +126,7 @@ def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text
     
     return output_text, output_list, data, data_file_name_no_ext
 
-def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, data_file_name_no_ext, custom_labels_df, return_intermediate_files, embeddings_super_compress, low_resource_mode, save_topic_model, embeddings_out, zero_shot_similarity, random_seed, calc_probs, vectoriser_state, progress=gr.Progress(track_tqdm=True)):
+def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, data_file_name_no_ext, custom_labels_df, return_intermediate_files, embeddings_super_compress, low_resource_mode, save_topic_model, embeddings_out, embeddings_type_state, zero_shot_similarity, random_seed, calc_probs, vectoriser_state, progress=gr.Progress(track_tqdm=True)):
 
     all_tic = time.perf_counter()
 
@@ -161,7 +161,13 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
     if low_resource_mode == "No":
         print("Using high resource BGE transformer model")
 
-        embedding_model = SentenceTransformer(embeddings_name)
+        embedding_model = SentenceTransformer(embeddings_name)       
+
+        # If tfidf embeddings currently exist, wipe these empty
+        if embeddings_type_state == "tfidf":
+            embeddings_out = np.array([])
+
+        embeddings_type_state = "bge"
 
         # UMAP model uses Bertopic defaults
         umap_model = UMAP(n_neighbors=15, n_components=5, min_dist=0.0, metric='cosine', low_memory=False, random_state=random_seed)
@@ -169,11 +175,16 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
     else:
         print("Choosing low resource TF-IDF model.")
 
-        embedding_model_pipe = make_pipeline(
+        embedding_model = make_pipeline(
                 TfidfVectorizer(),
                 TruncatedSVD(100, random_state=random_seed)
                 )
-        embedding_model = embedding_model_pipe
+        
+        # If bge embeddings currently exist, wipe these empty, then rename embeddings type
+        if embeddings_type_state == "bge":
+            embeddings_out = np.array([])
+
+        embeddings_type_state = "tfidf"
 
         umap_model = TruncatedSVD(n_components=5, random_state=random_seed)
 
@@ -246,7 +257,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
         except:
             print(fail_error_message)
 
-            return fail_error_message, output_list, embeddings_out, data_file_name_no_ext, None, docs, vectoriser_model
+            return fail_error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model
 
         # For some reason, zero topic modelling exports assigned topics as a np.array instead of a list. Converting it back here.
         if isinstance(assigned_topics, np.ndarray):
@@ -268,7 +279,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
 
     if not assigned_topics:
     # Handle the empty array case
-        return "No topics found.", output_list, embeddings_out, data_file_name_no_ext, topic_model, docs
+        return "No topics found.", output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, topic_model, docs
     
     else: 
         print("Topic model created.")
@@ -304,7 +315,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
     time_out = f"All processes took {all_toc - all_tic:0.1f} seconds."
     print(time_out)
 
-    return output_text, output_list, embeddings_out, data_file_name_no_ext, topic_model, docs, vectoriser_model
+    return output_text, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, topic_model, docs, vectoriser_model
 
 def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, save_topic_model, progress=gr.Progress(track_tqdm=True)):
 
