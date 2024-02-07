@@ -11,6 +11,8 @@ from bertopic import BERTopic
 from funcs.clean_funcs import initial_clean
 from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs
 from funcs.embeddings import make_or_load_embeddings
+from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, hierarchical_topics_custom, visualize_hierarchy_custom
+
 
 from sentence_transformers import SentenceTransformer
 from sklearn.pipeline import make_pipeline
@@ -145,9 +147,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
     if not in_colnames:
         error_message = "Please enter one column name to use for cleaning and finding topics."
         print(error_message)
-        return error_message, None, data_file_name_no_ext, embeddings_out, None, None
-
-    
+        return error_message, None, data_file_name_no_ext, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, None, vectoriser_state, []
 
     in_colnames_list_first = in_colnames[0]
 
@@ -186,7 +186,9 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
 
         embeddings_type_state = "tfidf"
 
-        umap_model = TruncatedSVD(n_components=5, random_state=random_seed)
+        #umap_model = TruncatedSVD(n_components=5, random_state=random_seed)
+        # UMAP model uses Bertopic defaults
+        umap_model = UMAP(n_neighbors=15, n_components=5, min_dist=0.0, metric='cosine', low_memory=True, random_state=random_seed)
 
     embeddings_out = make_or_load_embeddings(docs, file_list, embeddings_out, embedding_model, embeddings_super_compress, low_resource_mode)
 
@@ -195,7 +197,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
  
     progress(0.3, desc= "Embeddings loaded. Creating BERTopic model")
 
-    fail_error_message = "Topic model creation failed. Try reducing minimum documents per topic on the slider above (try 15 or less), then click 'Extract topics' again."
+    fail_error_message = "Topic model creation failed. Try reducing minimum documents per topic on the slider above (try 15 or less), then click 'Extract topics' again. If that doesn't work, try running the first two clean steps on your data first (see Clean data above) to ensure there are no NaNs/missing texts in your data."
 
     if not candidate_topics:
         
@@ -217,10 +219,11 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
                 topics_probs_out.to_csv(topics_probs_out_name)
                 output_list.append(topics_probs_out_name)
 
-        except:
+        except Exception as error:
+            print(error)
             print(fail_error_message)
 
-            return fail_error_message, output_list, embeddings_out, data_file_name_no_ext, None, docs, vectoriser_model
+            return fail_error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model, []
     
 
     # Do this if you have pre-defined topics
@@ -229,7 +232,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
             error_message = "Zero shot topic modelling currently not compatible with low-resource embeddings. Please change this option to 'No' on the options tab and retry."
             print(error_message)
 
-            return error_message, output_list, embeddings_out, data_file_name_no_ext, None, docs, vectoriser_model
+            return error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model, []
 
         zero_shot_topics = read_file(candidate_topics.name)
         zero_shot_topics_lower = list(zero_shot_topics.iloc[:, 0].str.lower())
@@ -254,17 +257,21 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
                 topics_probs_out.to_csv(topics_probs_out_name)
                 output_list.append(topics_probs_out_name)
 
-        except:
+        except Exception as error:
+            print("An exception occurred:", error)
             print(fail_error_message)
 
-            return fail_error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model
+            return fail_error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model, []
 
         # For some reason, zero topic modelling exports assigned topics as a np.array instead of a list. Converting it back here.
         if isinstance(assigned_topics, np.ndarray):
             assigned_topics = assigned_topics.tolist()
 
-         # Zero shot modelling is a model merge, which wipes the c_tf_idf part of the resulting model completely. To get hierarchical modelling to work, we need to recreate this part of the model with the CountVectorizer options used to create the initial model. Since with zero shot, we are merging two models that have exactly the same set of documents, the vocubulary should be the same, and so recreating the cf_tf_idf component in this way shouldn't be a problem. Discussion here, and below based on Maarten's suggested code: https://github.com/MaartenGr/BERTopic/issues/1700
+       
 
+         # Zero shot modelling is a model merge, which wipes the c_tf_idf part of the resulting model completely. To get hierarchical modelling to work, we need to recreate this part of the model with the CountVectorizer options used to create the initial model. Since with zero shot, we are merging two models that have exactly the same set of documents, the vocubulary should be the same, and so recreating the cf_tf_idf component in this way shouldn't be a problem. Discussion here, and below based on Maarten's suggested code: https://github.com/MaartenGr/BERTopic/issues/1700     
+
+        # Get document info
         doc_dets = topic_model.get_document_info(docs)
 
         documents_per_topic = doc_dets.groupby(['Topic'], as_index=False).agg({'Document': ' '.join})
@@ -277,12 +284,18 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
         c_tf_idf, _ = topic_model._c_tf_idf(documents_per_topic)
         topic_model.c_tf_idf_ = c_tf_idf
 
+        ###
+
+
+    # Check we have topics
     if not assigned_topics:
-    # Handle the empty array case
-        return "No topics found.", output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, topic_model, docs
-    
+        return "No topics found.", output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, topic_model, docs, vectoriser_model,[]
     else: 
         print("Topic model created.")
+
+    # Tidy up topic label format a bit to have commas and spaces by default
+    new_topic_labels = topic_model.generate_topic_labels(nr_words=3, separator=", ")
+    topic_model.set_topic_labels(new_topic_labels)
 
     # Replace current topic labels if new ones loaded in
     if not custom_labels_df.empty:
@@ -315,9 +328,9 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
     time_out = f"All processes took {all_toc - all_tic:0.1f} seconds."
     print(time_out)
 
-    return output_text, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, topic_model, docs, vectoriser_model
+    return output_text, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, topic_model, docs, vectoriser_model, assigned_topics
 
-def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, save_topic_model, progress=gr.Progress(track_tqdm=True)):
+def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, assigned_topics, vectoriser_model, save_topic_model, progress=gr.Progress(track_tqdm=True)):
 
     progress(0, desc= "Preparing data")
 
@@ -325,7 +338,8 @@ def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, sa
 
     all_tic = time.perf_counter()
 
-    assigned_topics, probs = topic_model.fit_transform(docs, embeddings_out)
+    # This step not necessary?
+    #assigned_topics, probs = topic_model.fit_transform(docs, embeddings_out)
 
     if isinstance(assigned_topics, np.ndarray):
         assigned_topics = assigned_topics.tolist()
@@ -339,7 +353,12 @@ def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, sa
     # Then, update the topics to the ones that considered the new data
 
     progress(0.6, desc= "Updating original model")
-    topic_model.update_topics(docs, topics=assigned_topics)
+
+    topic_model.update_topics(docs, topics=assigned_topics, vectorizer_model = vectoriser_model)
+
+    # Tidy up topic label format a bit to have commas and spaces by default
+    new_topic_labels = topic_model.generate_topic_labels(nr_words=3, separator=", ")
+    topic_model.set_topic_labels(new_topic_labels)
 
     print("Finished reducing outliers.")
 
@@ -375,7 +394,7 @@ def represent_topics(topic_model, docs, data_file_name_no_ext, low_resource_mode
 
     representation_model = create_representation_model(representation_type, llm_config, hf_model_name, hf_model_file, chosen_start_tag, low_resource_mode)  
 
-    progress(0.6, desc= "Updating existing topics")
+    progress(0.3, desc= "Updating existing topics")
     topic_model.update_topics(docs, vectorizer_model=vectoriser_model, representation_model=representation_model)
 
     topic_dets = topic_model.get_topic_info()
@@ -394,8 +413,7 @@ def represent_topics(topic_model, docs, data_file_name_no_ext, low_resource_mode
     else:
         new_topic_labels = topic_model.generate_topic_labels(nr_words=3, separator=", ", aspect = representation_type)
 
-        topic_model.set_topic_labels(new_topic_labels)#list(topic_dets[representation_type]))
-        #topic_model.set_topic_labels(list(topic_dets["Name"]))
+        topic_model.set_topic_labels(new_topic_labels)
 
     # Outputs
     progress(0.8, desc= "Saving outputs")
@@ -414,8 +432,7 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
     output_list = []
     vis_tic = time.perf_counter()
 
-    from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, visualize_barchart_custom
-
+    
     if not visualisation_type_radio:
         return "Please choose a visualisation type above.", output_list, None, None
 
@@ -475,7 +492,7 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
 
     elif visualisation_type_radio == "Hierarchical view":
 
-        hierarchical_topics = topic_model.hierarchical_topics(docs)
+        hierarchical_topics = hierarchical_topics_custom(topic_model, docs)
 
         # Print topic tree
         tree = topic_model.get_topic_tree(hierarchical_topics, tight_layout = True)
@@ -488,16 +505,28 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
         output_list.append(tree_name)
 
         # Save new hierarchical topic model to file
-        hierarchical_topics_name = data_file_name_no_ext + '_' + 'vis_hierarchy_topics_' + today_rev + '.csv'
+        hierarchical_topics_name = data_file_name_no_ext + '_' + 'vis_hierarchy_topics_distz_' + today_rev + '.csv'
         hierarchical_topics.to_csv(hierarchical_topics_name)
         output_list.append(hierarchical_topics_name)
 
-        try:
-            topics_vis = visualize_hierarchical_documents_custom(topic_model, docs, label_list, hierarchical_topics, reduced_embeddings=reduced_embeddings, sample = sample_prop, hide_document_hover= False, custom_labels=True, width= 1200, height = 750)
-            topics_vis_2 = topic_model.visualize_hierarchy(hierarchical_topics=hierarchical_topics, width= 1200, height = 750)
-        except:
-            error_message = "Visualisation preparation failed. Perhaps you need more topics to create the full hierarchy (more than 10)?"
-            return error_message, output_list, None, None
+
+        #try:
+        topics_vis, hierarchy_df, hierarchy_topic_names = visualize_hierarchical_documents_custom(topic_model, docs, label_list, hierarchical_topics, reduced_embeddings=reduced_embeddings, sample = sample_prop, hide_document_hover= False, custom_labels=True, width= 1200, height = 750)
+        topics_vis_2 = visualize_hierarchy_custom(topic_model, hierarchical_topics=hierarchical_topics, width= 1200, height = 750)
+
+        # Write hierarchical topics levels to df
+        hierarchy_df_name = data_file_name_no_ext + '_' + 'hierarchy_topics_df_' + today_rev + '.csv'
+        hierarchy_df.to_csv(hierarchy_df_name)
+        output_list.append(hierarchy_df_name)
+
+        # Write hierarchical topics names to df
+        hierarchy_topic_names_name = data_file_name_no_ext + '_' + 'hierarchy_topics_names_' + today_rev + '.csv'
+        hierarchy_topic_names.to_csv(hierarchy_topic_names_name)
+        output_list.append(hierarchy_topic_names_name)
+
+        #except:
+        #    error_message = "Visualisation preparation failed. Perhaps you need more topics to create the full hierarchy (more than 10)?"
+        #    return error_message, output_list, None, None
 
         topics_vis_name = data_file_name_no_ext + '_' + 'vis_hierarchy_topic_doc_' + today_rev + '.html'
         topics_vis.write_html(topics_vis_name)

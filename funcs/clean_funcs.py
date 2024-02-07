@@ -33,18 +33,19 @@ multiple_spaces_regex = r'\s{2,}'
 
 def initial_clean(texts, custom_regex, progress=gr.Progress()):
     texts = pl.Series(texts).str.strip_chars()
-    text = texts.str.replace_all(html_pattern_regex, '')
-    text = text.str.replace_all(email_pattern_regex, '')
-    text = text.str.replace_all(nums_two_more_regex, '')
-    text = text.str.replace_all(postcode_pattern_regex, '')
-    text = text.str.replace_all(multiple_spaces_regex, '')
+    text = texts.str.replace_all(html_pattern_regex, ' ')
+    text = text.str.replace_all(email_pattern_regex, ' ')
+    text = text.str.replace_all(nums_two_more_regex, ' ')
+    text = text.str.replace_all(postcode_pattern_regex, ' ')
 
     # Allow for custom regex patterns to be removed
     if len(custom_regex) > 0:
         for pattern in custom_regex:
             raw_string_pattern = r'{}'.format(pattern)
             print("Removing regex pattern: ", raw_string_pattern)
-            text = text.str.replace_all(raw_string_pattern, '')
+            text = text.str.replace_all(raw_string_pattern, ' ')
+
+    text = text.str.replace_all(multiple_spaces_regex, ' ')
 
     text = text.to_list()
     

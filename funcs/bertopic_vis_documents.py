@@ -1,10 +1,23 @@
 import numpy as np
 import pandas as pd
+import gradio as gr
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from bertopic._utils import check_documents_type, validate_distance_matrix
+from bertopic.plotting._hierarchy import _get_annotations
+import plotly.figure_factory as ff
+from packaging import version
+
+import math
 from umap import UMAP
-from typing import List, Union
+from typing import List, Union, Callable
+
+from scipy.sparse import csr_matrix
+from scipy.cluster import hierarchy as sch
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn import __version__ as sklearn_version
+from tqdm import tqdm
 
 import itertools
 import numpy as np
@@ -23,7 +36,7 @@ def visualize_documents_custom(topic_model,
                         custom_labels: Union[bool, str] = False,
                         title: str = "<b>Documents and Topics</b>",
                         width: int = 1200,
-                        height: int = 750):
+                        height: int = 750, progress=gr.Progress(track_tqdm=True)):
     """ Visualize documents and their topics in 2D
 
     Arguments:
@@ -164,9 +177,9 @@ def visualize_documents_custom(topic_model,
         names = [topic_model.custom_labels_[topic + topic_model._outliers] for topic in unique_topics]
     else:
         print("Not using custom labels")
-        names = [f"{topic}_" + "_".join([word for word, value in topic_model.get_topic(topic)][:3]) for topic in unique_topics]
+        names = [f"{topic} " + ", ".join([word for word, value in topic_model.get_topic(topic)][:3]) for topic in unique_topics]
 
-    print(names)
+    #print(names)
 
     # Visualize
     fig = go.Figure()
@@ -254,6 +267,350 @@ def visualize_documents_custom(topic_model,
     fig.update_yaxes(visible=False)
     return fig
 
+def hierarchical_topics_custom(self,
+                        docs: List[str],
+                        linkage_function: Callable[[csr_matrix], np.ndarray] = None,
+                        distance_function: Callable[[csr_matrix], csr_matrix] = None, progress=gr.Progress(track_tqdm=True)) -> pd.DataFrame:
+    """ Create a hierarchy of topics
+
+    To create this hierarchy, BERTopic needs to be already fitted once.
+    Then, a hierarchy is calculated on the distance matrix of the c-TF-IDF
+    representation using `scipy.cluster.hierarchy.linkage`.
+
+    Based on that hierarchy, we calculate the topic representation at each
+    merged step. This is a local representation, as we only assume that the
+    chosen step is merged and not all others which typically improves the
+    topic representation.
+
+    Arguments:
+        docs: The documents you used when calling either `fit` or `fit_transform`
+        linkage_function: The linkage function to use. Default is:
+                            `lambda x: sch.linkage(x, 'ward', optimal_ordering=True)`
+        distance_function: The distance function to use on the c-TF-IDF matrix. Default is:
+                            `lambda x: 1 - cosine_similarity(x)`.
+                            You can pass any function that returns either a square matrix of 
+                            shape (n_samples, n_samples) with zeros on the diagonal and 
+                            non-negative values or condensed distance matrix of shape
+                            (n_samples * (n_samples - 1) / 2,) containing the upper
+                            triangular of the distance matrix.
+
+    Returns:
+        hierarchical_topics: A dataframe that contains a hierarchy of topics
+                                represented by their parents and their children
+
+    Examples:
+
+    ```python
+    from bertopic import BERTopic
+    topic_model = BERTopic()
+    topics, probs = topic_model.fit_transform(docs)
+    hierarchical_topics = topic_model.hierarchical_topics(docs)
+    ```
+
+    A custom linkage function can be used as follows:
+
+    ```python
+    from scipy.cluster import hierarchy as sch
+    from bertopic import BERTopic
+    topic_model = BERTopic()
+    topics, probs = topic_model.fit_transform(docs)
+
+    # Hierarchical topics
+    linkage_function = lambda x: sch.linkage(x, 'ward', optimal_ordering=True)
+    hierarchical_topics = topic_model.hierarchical_topics(docs, linkage_function=linkage_function)
+    ```
+    """
+    check_documents_type(docs)
+    if distance_function is None:
+        distance_function = lambda x: 1 - cosine_similarity(x)
+
+    if linkage_function is None:
+        linkage_function = lambda x: sch.linkage(x, 'ward', optimal_ordering=True)
+
+    # Calculate distance
+    embeddings = self.c_tf_idf_[self._outliers:]
+    X = distance_function(embeddings)
+    X = validate_distance_matrix(X, embeddings.shape[0])
+
+    # Use the 1-D condensed distance matrix as an input instead of the raw distance matrix
+    Z = linkage_function(X)
+
+    # Calculate basic bag-of-words to be iteratively merged later
+    documents = pd.DataFrame({"Document": docs,
+                                "ID": range(len(docs)),
+                                "Topic": self.topics_})
+    documents_per_topic = documents.groupby(['Topic'], as_index=False).agg({'Document': ' '.join})
+    documents_per_topic = documents_per_topic.loc[documents_per_topic.Topic != -1, :]
+    clean_documents = self._preprocess_text(documents_per_topic.Document.values)
+
+    # Scikit-Learn Deprecation: get_feature_names is deprecated in 1.0
+    # and will be removed in 1.2. Please use get_feature_names_out instead.
+    if version.parse(sklearn_version) >= version.parse("1.0.0"):
+        words = self.vectorizer_model.get_feature_names_out()
+    else:
+        words = self.vectorizer_model.get_feature_names()
+
+    bow = self.vectorizer_model.transform(clean_documents)
+
+    # Extract clusters
+    hier_topics = pd.DataFrame(columns=["Parent_ID", "Parent_Name", "Topics",
+                                        "Child_Left_ID", "Child_Left_Name",
+                                        "Child_Right_ID", "Child_Right_Name"])
+    for index in tqdm(range(len(Z))):
+
+        # Find clustered documents
+        clusters = sch.fcluster(Z, t=Z[index][2], criterion='distance') - self._outliers
+        nr_clusters = len(clusters)
+
+        # Extract first topic we find to get the set of topics in a merged topic
+        topic = None
+        val = Z[index][0]
+        while topic is None:
+            if val - len(clusters) < 0:
+                topic = int(val)
+            else:
+                val = Z[int(val - len(clusters))][0]
+        clustered_topics = [i for i, x in enumerate(clusters) if x == clusters[topic]]
+
+        # Group bow per cluster, calculate c-TF-IDF and extract words
+        grouped = csr_matrix(bow[clustered_topics].sum(axis=0))
+        c_tf_idf = self.ctfidf_model.transform(grouped)
+        selection = documents.loc[documents.Topic.isin(clustered_topics), :]
+        selection.Topic = 0
+        words_per_topic = self._extract_words_per_topic(words, selection, c_tf_idf, calculate_aspects=False)
+
+        # Extract parent's name and ID
+        parent_id = index + len(clusters)
+        parent_name = ", ".join([x[0] for x in words_per_topic[0]][:5])
+
+        # Extract child's name and ID
+        Z_id = Z[index][0]
+        child_left_id = Z_id if Z_id - nr_clusters < 0 else Z_id - nr_clusters
+
+        if Z_id - nr_clusters < 0:
+            child_left_name = ", ".join([x[0] for x in self.get_topic(Z_id)][:5])
+        else:
+            child_left_name = hier_topics.iloc[int(child_left_id)].Parent_Name
+
+        # Extract child's name and ID
+        Z_id = Z[index][1]
+        child_right_id = Z_id if Z_id - nr_clusters < 0 else Z_id - nr_clusters
+
+        if Z_id - nr_clusters < 0:
+            child_right_name = ", ".join([x[0] for x in self.get_topic(Z_id)][:5])
+        else:
+            child_right_name = hier_topics.iloc[int(child_right_id)].Parent_Name
+
+        # Save results
+        hier_topics.loc[len(hier_topics), :] = [parent_id, parent_name,
+                                                clustered_topics,
+                                                int(Z[index][0]), child_left_name,
+                                                int(Z[index][1]), child_right_name]
+
+    hier_topics["Distance"] = Z[:, 2]
+    hier_topics = hier_topics.sort_values("Parent_ID", ascending=False)
+    hier_topics[["Parent_ID", "Child_Left_ID", "Child_Right_ID"]] = hier_topics[["Parent_ID", "Child_Left_ID", "Child_Right_ID"]].astype(str)
+
+    return hier_topics
+
+def visualize_hierarchy_custom(topic_model,
+                        orientation: str = "left",
+                        topics: List[int] = None,
+                        top_n_topics: int = None,
+                        custom_labels: Union[bool, str] = False,
+                        title: str = "<b>Hierarchical Clustering</b>",
+                        width: int = 1000,
+                        height: int = 600,
+                        hierarchical_topics: pd.DataFrame = None,
+                        linkage_function: Callable[[csr_matrix], np.ndarray] = None,
+                        distance_function: Callable[[csr_matrix], csr_matrix] = None,
+                        color_threshold: int = 1) -> go.Figure:
+    """ Visualize a hierarchical structure of the topics
+
+    A ward linkage function is used to perform the
+    hierarchical clustering based on the cosine distance
+    matrix between topic embeddings.
+
+    Arguments:
+        topic_model: A fitted BERTopic instance.
+        orientation: The orientation of the figure.
+                     Either 'left' or 'bottom'
+        topics: A selection of topics to visualize
+        top_n_topics: Only select the top n most frequent topics
+        custom_labels: If bool, whether to use custom topic labels that were defined using 
+                       `topic_model.set_topic_labels`.
+                       If `str`, it uses labels from other aspects, e.g., "Aspect1".
+                       NOTE: Custom labels are only generated for the original 
+                       un-merged topics.
+        title: Title of the plot.
+        width: The width of the figure. Only works if orientation is set to 'left'
+        height: The height of the figure. Only works if orientation is set to 'bottom'
+        hierarchical_topics: A dataframe that contains a hierarchy of topics
+                             represented by their parents and their children.
+                             NOTE: The hierarchical topic names are only visualized
+                             if both `topics` and `top_n_topics` are not set.
+        linkage_function: The linkage function to use. Default is:
+                          `lambda x: sch.linkage(x, 'ward', optimal_ordering=True)`
+                          NOTE: Make sure to use the same `linkage_function` as used
+                          in `topic_model.hierarchical_topics`.
+        distance_function: The distance function to use on the c-TF-IDF matrix. Default is:
+                           `lambda x: 1 - cosine_similarity(x)`.
+                            You can pass any function that returns either a square matrix of 
+                            shape (n_samples, n_samples) with zeros on the diagonal and 
+                            non-negative values or condensed distance matrix of shape 
+                            (n_samples * (n_samples - 1) / 2,) containing the upper 
+                            triangular of the distance matrix.
+                           NOTE: Make sure to use the same `distance_function` as used
+                           in `topic_model.hierarchical_topics`.
+        color_threshold: Value at which the separation of clusters will be made which
+                         will result in different colors for different clusters.
+                         A higher value will typically lead in less colored clusters.
+
+    Returns:
+        fig: A plotly figure
+
+    Examples:
+
+    To visualize the hierarchical structure of
+    topics simply run:
+
+    ```python
+    topic_model.visualize_hierarchy()
+    ```
+
+    If you also want the labels visualized of hierarchical topics,
+    run the following:
+
+    ```python
+    # Extract hierarchical topics and their representations
+    hierarchical_topics = topic_model.hierarchical_topics(docs)
+
+    # Visualize these representations
+    topic_model.visualize_hierarchy(hierarchical_topics=hierarchical_topics)
+    ```
+
+    If you want to save the resulting figure:
+
+    ```python
+    fig = topic_model.visualize_hierarchy()
+    fig.write_html("path/to/file.html")
+    ```
+    <iframe src="../../getting_started/visualization/hierarchy.html"
+    style="width:1000px; height: 680px; border: 0px;""></iframe>
+    """
+    if distance_function is None:
+        distance_function = lambda x: 1 - cosine_similarity(x)
+
+    if linkage_function is None:
+        linkage_function = lambda x: sch.linkage(x, 'ward', optimal_ordering=True)
+
+    # Select topics based on top_n and topics args
+    freq_df = topic_model.get_topic_freq()
+    freq_df = freq_df.loc[freq_df.Topic != -1, :]
+    if topics is not None:
+        topics = list(topics)
+    elif top_n_topics is not None:
+        topics = sorted(freq_df.Topic.to_list()[:top_n_topics])
+    else:
+        topics = sorted(freq_df.Topic.to_list())
+
+    # Select embeddings
+    all_topics = sorted(list(topic_model.get_topics().keys()))
+    indices = np.array([all_topics.index(topic) for topic in topics])
+
+    # Select topic embeddings
+    if topic_model.c_tf_idf_ is not None:
+        embeddings = topic_model.c_tf_idf_[indices]
+    else:
+        embeddings = np.array(topic_model.topic_embeddings_)[indices]
+        
+    # Annotations
+    if hierarchical_topics is not None and len(topics) == len(freq_df.Topic.to_list()):
+        annotations = _get_annotations(topic_model=topic_model,
+                                       hierarchical_topics=hierarchical_topics,
+                                       embeddings=embeddings,
+                                       distance_function=distance_function,
+                                       linkage_function=linkage_function,
+                                       orientation=orientation,
+                                       custom_labels=custom_labels)
+    else:
+        annotations = None
+
+    # wrap distance function to validate input and return a condensed distance matrix
+    distance_function_viz = lambda x: validate_distance_matrix(
+        distance_function(x), embeddings.shape[0])
+    # Create dendogram
+    fig = ff.create_dendrogram(embeddings,
+                               orientation=orientation,
+                               distfun=distance_function_viz,
+                               linkagefun=linkage_function,
+                               hovertext=annotations,
+                               color_threshold=color_threshold)
+
+    # Create nicer labels
+    axis = "yaxis" if orientation == "left" else "xaxis"
+    if isinstance(custom_labels, str):
+        new_labels = [[[str(x), None]] + topic_model.topic_aspects_[custom_labels][x] for x in fig.layout[axis]["ticktext"]]
+        new_labels = [", ".join([label[0] for label in labels[:4]]) for labels in new_labels]
+        new_labels = [label if len(label) < 30 else label[:27] + "..." for label in new_labels]
+    elif topic_model.custom_labels_ is not None and custom_labels:
+        new_labels = [topic_model.custom_labels_[topics[int(x)] + topic_model._outliers] for x in fig.layout[axis]["ticktext"]]
+    else:
+        new_labels = [[[str(topics[int(x)]), None]] + topic_model.get_topic(topics[int(x)])
+                      for x in fig.layout[axis]["ticktext"]]
+        new_labels = [", ".join([label[0] for label in labels[:4]]) for labels in new_labels]
+        new_labels = [label if len(label) < 30 else label[:27] + "..." for label in new_labels]
+
+    # Stylize layout
+    fig.update_layout(
+        plot_bgcolor='#ECEFF1',
+        template="plotly_white",
+        title={
+            'text': f"{title}",
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+            'font': dict(
+                size=22,
+                color="Black")
+        },
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=16,
+            font_family="Rockwell"
+        ),
+    )
+
+    # Stylize orientation
+    if orientation == "left":
+        fig.update_layout(height=200 + (15 * len(topics)),
+                          width=width,
+                          yaxis=dict(tickmode="array",
+                                     ticktext=new_labels))
+
+        # Fix empty space on the bottom of the graph
+        y_max = max([trace['y'].max() + 5 for trace in fig['data']])
+        y_min = min([trace['y'].min() - 5 for trace in fig['data']])
+        fig.update_layout(yaxis=dict(range=[y_min, y_max]))
+
+    else:
+        fig.update_layout(width=200 + (15 * len(topics)),
+                          height=height,
+                          xaxis=dict(tickmode="array",
+                                     ticktext=new_labels))
+
+    if hierarchical_topics is not None:
+        for index in [0, 3]:
+            axis = "x" if orientation == "left" else "y"
+            xs = [data["x"][index] for data in fig.data if (data["text"] and data[axis][index] > 0)]
+            ys = [data["y"][index] for data in fig.data if (data["text"] and data[axis][index] > 0)]
+            hovertext = [data["text"][index] for data in fig.data if (data["text"] and data[axis][index] > 0)]
+
+            fig.add_trace(go.Scatter(x=xs, y=ys, marker_color='black',
+                                     hovertext=hovertext, hoverinfo="text",
+                                     mode='markers', showlegend=False))
+    return fig
+
 def visualize_hierarchical_documents_custom(topic_model,
                                      docs: List[str],
                                      hover_labels: List[str],
@@ -269,7 +626,7 @@ def visualize_hierarchical_documents_custom(topic_model,
                                      custom_labels: Union[bool, str] = False,
                                      title: str = "<b>Hierarchical Documents and Topics</b>",
                                      width: int = 1200,
-                                     height: int = 750) -> go.Figure:
+                                     height: int = 750, progress=gr.Progress(track_tqdm=True)) -> go.Figure:
     """ Visualize documents and their topics in 2D at different levels of hierarchy
 
     Arguments:
@@ -455,21 +812,22 @@ def visualize_hierarchical_documents_custom(topic_model,
     # Prepare topic names of original and merged topics
     trace_names = []
     topic_names = {}
+    trace_name_char_length = 60
     for topic in range(hierarchical_topics.Parent_ID.astype(int).max()):
         if topic < hierarchical_topics.Parent_ID.astype(int).min():
             if topic_model.get_topic(topic):
                 if isinstance(custom_labels, str):
-                    trace_name = f"{topic}_" + "_".join(list(zip(*topic_model.topic_aspects_[custom_labels][topic]))[0][:3])
+                    trace_name = f"{topic} " + ", ".join(list(zip(*topic_model.topic_aspects_[custom_labels][topic]))[0][:5])
                 elif topic_model.custom_labels_ is not None and custom_labels:
                     trace_name = topic_model.custom_labels_[topic + topic_model._outliers]
                 else:
-                    trace_name = f"{topic}_" + "_".join([word[:20] for word, _ in topic_model.get_topic(topic)][:3])
-                topic_names[topic] = {"trace_name": trace_name[:40], "plot_text": trace_name[:40]}
+                    trace_name = f"{topic} " + ", ".join([word[:20] for word, _ in topic_model.get_topic(topic)][:5])
+                topic_names[topic] = {"trace_name": trace_name[:trace_name_char_length], "plot_text": trace_name[:trace_name_char_length]}
                 trace_names.append(trace_name)
         else:
-            trace_name = f"{topic}_" + hierarchical_topics.loc[hierarchical_topics.Parent_ID == str(topic), "Parent_Name"].values[0]
-            plot_text = "_".join([name[:20] for name in trace_name.split("_")[:3]])
-            topic_names[topic] = {"trace_name": trace_name[:40], "plot_text": plot_text[:40]}
+            trace_name = f"{topic} " + hierarchical_topics.loc[hierarchical_topics.Parent_ID == str(topic), "Parent_Name"].values[0]
+            plot_text = ", ".join([name[:20] for name in trace_name.split(" ")[:5]])
+            topic_names[topic] = {"trace_name": trace_name[:trace_name_char_length], "plot_text": plot_text[:trace_name_char_length]}
             trace_names.append(trace_name)
 
     # Prepare traces
@@ -598,7 +956,13 @@ def visualize_hierarchical_documents_custom(topic_model,
 
     fig.update_xaxes(visible=False)
     fig.update_yaxes(visible=False)
-    return fig
+
+    hierarchy_topics_df = df.filter(regex=r'topic|^level').drop_duplicates(subset="topic")
+
+    topic_names = pd.DataFrame(topic_names).T
+
+
+    return fig, hierarchy_topics_df, topic_names
 
 def visualize_barchart_custom(topic_model,
                        topics: List[int] = None,
@@ -607,7 +971,7 @@ def visualize_barchart_custom(topic_model,
                        custom_labels: Union[bool, str] = False,
                        title: str = "<b>Topic Word Scores</b>",
                        width: int = 250,
-                       height: int = 250) -> go.Figure:
+                       height: int = 250, progress=gr.Progress(track_tqdm=True)) -> go.Figure:
     """ Visualize a barchart of selected topics
 
     Arguments:
