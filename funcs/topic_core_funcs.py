@@ -494,19 +494,24 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
 
         hierarchical_topics = hierarchical_topics_custom(topic_model, docs)
 
-        # Print topic tree
-        tree = topic_model.get_topic_tree(hierarchical_topics, tight_layout = True)
-        tree_name = data_file_name_no_ext + '_' + 'vis_hierarchy_tree_' + today_rev + '.txt'
+        # Print topic tree - may get encoding errors, so doing try except
+        try:
+            tree = topic_model.get_topic_tree(hierarchical_topics, tight_layout = True)
+            tree_name = data_file_name_no_ext + '_' + 'vis_hierarchy_tree_' + today_rev + '.txt'
 
-        with open(tree_name, "w") as file:
-            # Write the string to the file
-            file.write(tree)
+            with open(tree_name, "w") as file:
+                # Write the string to the file
+                file.write(tree)
 
-        output_list.append(tree_name)
+            output_list.append(tree_name)
+
+        except Exception as error:
+            print("An exception occurred when making topic tree document, skipped:", error)
+
 
         # Save new hierarchical topic model to file
-        hierarchical_topics_name = data_file_name_no_ext + '_' + 'vis_hierarchy_topics_distz_' + today_rev + '.csv'
-        hierarchical_topics.to_csv(hierarchical_topics_name)
+        hierarchical_topics_name = data_file_name_no_ext + '_' + 'vis_hierarchy_topics_dist_' + today_rev + '.csv'
+        hierarchical_topics.to_csv(hierarchical_topics_name, index = None)
         output_list.append(hierarchical_topics_name)
 
 
@@ -516,12 +521,12 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
 
         # Write hierarchical topics levels to df
         hierarchy_df_name = data_file_name_no_ext + '_' + 'hierarchy_topics_df_' + today_rev + '.csv'
-        hierarchy_df.to_csv(hierarchy_df_name)
+        hierarchy_df.to_csv(hierarchy_df_name, index = None)
         output_list.append(hierarchy_df_name)
 
         # Write hierarchical topics names to df
         hierarchy_topic_names_name = data_file_name_no_ext + '_' + 'hierarchy_topics_names_' + today_rev + '.csv'
-        hierarchy_topic_names.to_csv(hierarchy_topic_names_name)
+        hierarchy_topic_names.to_csv(hierarchy_topic_names_name, index = None)
         output_list.append(hierarchy_topic_names_name)
 
         #except:

@@ -8,32 +8,18 @@ custom_words = []
 my_stop_words = custom_words
 
 # #### Some of my cleaning functions
-email_start_pattern_regex = r'.*(?i)importance:|.*(?i)subject:'
-email_end_pattern_regex = r'(?i)kind regards.*|(?i)many thanks.*|(?i)sincerely.*'
 html_pattern_regex = r'<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});|\xa0|&nbsp;'
+html_start_pattern_end_dots_regex = r'<(.*?)\.\.'
 email_pattern_regex = r'\S*@\S*\s?'
 num_pattern_regex = r'[0-9]+'
 nums_two_more_regex = r'\b[0-9]{2,}\b|\b[0-9]+\s[0-9]+\b'
 postcode_pattern_regex = r'(\b(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]? ?[0-9][A-Z]{2})|((GIR ?0A{2})\b$)|(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]? ?[0-9]{1}?)$)|(\b(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]?)\b$)'
-warning_pattern_regex = r'(?i)caution: this email originated from outside of the organization. do not click links or open attachments unless you recognize the sender and know the content is safe.'
-egress_pattern_regex = r'(?i)has been securely delivered by egress switch and was securely decoded on'
-nbsp_pattern_regex = r'&nbsp;'
 multiple_spaces_regex = r'\s{2,}'
-
-# Pre-compiling the regular expressions for efficiency (not actually used)
-# email_start_pattern = re.compile(email_start_pattern_regex)
-# email_end_pattern = re.compile(email_end_pattern_regex)
-# html_pattern = re.compile(html_pattern_regex)
-# email_pattern = re.compile(email_end_pattern_regex)
-# num_pattern = re.compile(num_pattern_regex)
-# nums_two_more_regex_pattern = re.compile(nums_two_more_regex)
-# postcode_pattern = re.compile(postcode_pattern_regex)
-# warning_pattern = re.compile(warning_pattern_regex)
-# nbsp_pattern = re.compile(nbsp_pattern_regex)
 
 def initial_clean(texts, custom_regex, progress=gr.Progress()):
     texts = pl.Series(texts).str.strip_chars()
     text = texts.str.replace_all(html_pattern_regex, ' ')
+    text = text.str.replace_all(html_start_pattern_end_dots_regex, ' ')
     text = text.str.replace_all(email_pattern_regex, ' ')
     text = text.str.replace_all(nums_two_more_regex, ' ')
     text = text.str.replace_all(postcode_pattern_regex, ' ')
