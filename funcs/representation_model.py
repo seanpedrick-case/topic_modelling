@@ -6,12 +6,12 @@ import torch.cuda
 from huggingface_hub import hf_hub_download, snapshot_download
 
 from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, BaseRepresentation
-from funcs.prompts import capybara_prompt, capybara_start, open_hermes_prompt, open_hermes_start, stablelm_prompt, stablelm_start
+from funcs.prompts import capybara_prompt, capybara_start, open_hermes_prompt, open_hermes_start, stablelm_prompt, stablelm_start, phi3_prompt, phi3_start
 
 random_seed = 42
 
-chosen_prompt = open_hermes_prompt # stablelm_prompt 
-chosen_start_tag =  open_hermes_start # stablelm_start
+chosen_prompt = phi3_prompt #open_hermes_prompt # stablelm_prompt 
+chosen_start_tag =  phi3_start #open_hermes_start # stablelm_start
 
 
 # Currently set n_gpu_layers to 0 even with cuda due to persistent bugs in implementation with cuda
@@ -91,13 +91,14 @@ mmr = MaximalMarginalRelevance(diversity=0.5)
 base_rep = BaseRepresentation()
 
 # Find model file
-def find_model_file(hf_model_name, hf_model_file, search_folder):
+def find_model_file(hf_model_name, hf_model_file, search_folder, sub_folder):
     hf_loc = search_folder #os.environ["HF_HOME"]
-    hf_sub_loc = search_folder + "/hub/" #os.environ["HF_HOME"] 
+    hf_sub_loc = search_folder + sub_folder #os.environ["HF_HOME"] 
 
-    hf_model_name_path = hf_sub_loc + 'models--' + hf_model_name.replace("/","--")
-
-    print(hf_model_name_path)
+    if sub_folder == "/hub/":
+        hf_model_name_path = hf_sub_loc + 'models--' + hf_model_name.replace("/","--")
+    else:
+        hf_model_name_path = hf_sub_loc
 
     def find_file(root_folder, file_name):
         for root, dirs, files in os.walk(root_folder):
@@ -109,36 +110,11 @@ def find_model_file(hf_model_name, hf_model_file, search_folder):
     folder_path = hf_model_name_path  # Replace with your folder path
     file_to_find = hf_model_file         # Replace with the file name you're looking for
 
+    print("Searching for model file", hf_model_file, "in:", hf_model_name_path)
+
     found_file = find_file(folder_path, file_to_find) # os.environ["HF_HOME"]
-    if found_file:
-        print(f"Model file found: {found_file}")
-        return found_file
-    else:
-        error = "File not found."
-        print(error, " Downloading model from hub")
-
-        # Specify your custom directory
-        # Get HF_HOME environment variable or default to "~/.cache/huggingface/hub"
-        #hf_home_value = search_folder
-
-        # Check if the directory exists, create it if it doesn't
-        #if not os.path.exists(hf_home_value):
-        #    os.makedirs(hf_home_value)
-
-        
-       
-        found_file = hf_hub_download(repo_id=hf_model_name, filename=hf_model_file)#, local_dir=hf_home_value) # cache_dir
-
-        #path = snapshot_download(
-        #    repo_id=hf_model_name,
-        #    allow_patterns="config.json",
-        #    local_files_only=False
-        #)
-
-        print("Downloaded model to: ", found_file)
-
-        #found_file = find_file(path, file_to_find)
-        return found_file
+    
+    return found_file
 
 
 def create_representation_model(representation_type, llm_config, hf_model_name, hf_model_file, chosen_start_tag, low_resource_mode):
@@ -151,7 +127,7 @@ def create_representation_model(representation_type, llm_config, hf_model_name, 
 
         # Check for HF_HOME environment variable and supply a default value if it's not found (typical location for huggingface models)
         # Get HF_HOME environment variable or default to "~/.cache/huggingface/hub"
-        base_folder = "." #"~/.cache/huggingface/hub"
+        base_folder = "model" #"~/.cache/huggingface/hub"
         hf_home_value = os.getenv("HF_HOME", base_folder)
 
         # Expand the user symbol '~' to the full home directory path
@@ -162,12 +138,29 @@ def create_representation_model(representation_type, llm_config, hf_model_name, 
         if not os.path.exists(hf_home_value):
             os.makedirs(hf_home_value)
 
-        print(hf_home_value)
+        print("Searching base folder for model:", hf_home_value)
 
-        found_file = find_model_file(hf_model_name, hf_model_file,  hf_home_value)
+        found_file = find_model_file(hf_model_name, hf_model_file,  hf_home_value, "/rep/")
 
-        llm = Llama(model_path=found_file, stop=chosen_start_tag, n_gpu_layers=llm_config.n_gpu_layers, n_ctx=llm_config.n_ctx, rope_freq_scale=0.5, seed=seed) #**llm_config.model_dump())# 
+        if found_file:
+            print(f"Model file found in model folder: {found_file}")
+
+        else:
+            found_file = find_model_file(hf_model_name, hf_model_file,  hf_home_value, "/hub/")
+
+        if not found_file:
+            error = "File not found in HF hub directory or in local model file."
+            print(error, " Downloading model from hub")
+
+            found_file = hf_hub_download(repo_id=hf_model_name, filename=hf_model_file)#, local_dir=hf_home_value) # cache_dir
+
+            print("Downloaded model from Huggingface Hub to: ", found_file)
+
+        print("Loading representation model with", llm_config.n_gpu_layers, "layers allocated to GPU.")
+
+        llm = Llama(model_path=found_file, stop=chosen_start_tag, n_gpu_layers=llm_config.n_gpu_layers, n_ctx=llm_config.n_ctx,seed=seed) #**llm_config.model_dump())#  rope_freq_scale=0.5,
         #print(llm.n_gpu_layers)
+        print("Chosen prompt:", chosen_prompt)
         llm_model = LlamaCPP(llm, prompt=chosen_prompt)#, **gen_config.model_dump())
 
         # All representation models

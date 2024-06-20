@@ -10,6 +10,7 @@ from funcs.topic_core_funcs import pre_clean, extract_topics, reduce_outliers, r
 from funcs.helper_functions import initial_file_load, custom_regex_load
 from sklearn.feature_extraction.text import CountVectorizer
 
+
 # Gradio app
 
 block = gr.Blocks(theme = gr.themes.Base())
@@ -32,7 +33,9 @@ with block:
     # Topic modeller
     Generate topics from open text in tabular data, based on [BERTopic](https://maartengr.github.io/BERTopic/). Upload a data file (csv, xlsx, or parquet), then specify the open text column that you want to use to generate topics. Click 'Extract topics' after you have selected the minimum similar documents per topic and maximum total topics. Duplicate this space, or clone to your computer to avoid queues here!
     
-    Uses fast TF-IDF-based embeddings by default, which are fast but not very performant in terms of cluster. Change to [BAAI/bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) model embeddings on the options page for topics of much higher quality, but slower processing time. If you have an embeddings .npz file previously made using this model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics for zero-shot modelling, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available under the 'Options' tab. Topic representation with LLMs currently based on [StableLM-2-Zephyr-1.6B-GGUF](https://huggingface.co/second-state/stablelm-2-zephyr-1.6b-GGUF) - this works locally, but unfortunately this doesn't yet seem to work on the Huggingface website, I'm working on it!
+    Uses fast TF-IDF-based embeddings by default, which are fast but not very performant in terms of cluster. Change to [Mixedbread large v1](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1) model embeddings (512 dimensions, 8 bit quantisation) on the options page for topics of much higher quality, but slower processing time. If you have an embeddings .npz file previously made using this model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics for zero-shot modelling, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available under the 'Options' tab. Topic representation with LLMs currently based on [Phi-3-mini-128k-instruct-GGUF](https://huggingface.co/QuantFactory/Phi-3-mini-128k-instruct-GGUF), which is quite slow on CPU, so use a GPU-enabled computer if possible, building from the requirements_gpu.txt file in the base folder.
+
+    For small datasets, consider breaking up your text into sentences under 'Clean data' -> 'Split open text...' before topic modelling.
 
     I suggest [Wikipedia mini dataset](https://huggingface.co/datasets/rag-datasets/mini_wikipedia/tree/main/data) for testing the tool here, choose passages.parquet.
     """)    
@@ -48,9 +51,10 @@ with block:
                 clean_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Clean data - remove html, numbers with > 1 digits, emails, postcodes (UK), custom regex.")
                 drop_duplicate_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove duplicate text, drop < 50 char strings. May make old embedding files incompatible due to differing lengths.")
                 anonymise_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Anonymise data on file load. Personal details are redacted - not 100% effective. This is slow!")
+                split_sentence_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Split open text into sentences. Useful for small datasets.")
             with gr.Row():
                 custom_regex = gr.UploadButton(label="Import custom regex file", file_count="multiple")    
-                gr.Markdown("""Import custom regex - csv table with one column of regex patterns with header. Example pattern: (?i)roosevelt for case insensitive removal of this term.""")
+                gr.Markdown("""Import custom regex - csv table with one column of regex patterns with no header. Example pattern: (?i)roosevelt for case insensitive removal of this term.""")
                 custom_regex_text = gr.Textbox(label="Custom regex load status")
             clean_btn = gr.Button("Clean data")
 
@@ -108,7 +112,7 @@ with block:
 
     # Clean data
     custom_regex.upload(fn=custom_regex_load, inputs=[custom_regex], outputs=[custom_regex_text, custom_regex_state])
-    clean_btn.click(fn=pre_clean, inputs=[data_state, in_colnames, data_file_name_no_ext_state, custom_regex_state, clean_text, drop_duplicate_text, anonymise_drop], outputs=[output_single_text, output_file, data_state, data_file_name_no_ext_state], api_name="clean")
+    clean_btn.click(fn=pre_clean, inputs=[data_state, in_colnames, data_file_name_no_ext_state, custom_regex_state, clean_text, drop_duplicate_text, anonymise_drop, split_sentence_drop], outputs=[output_single_text, output_file, data_state, data_file_name_no_ext_state], api_name="clean")
 
     # Extract topics
     topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, data_file_name_no_ext_state, label_list_state, return_intermediate_files, embedding_super_compress, low_resource_mode_opt, save_topic_model, embeddings_state, embeddings_type_state, zero_shot_similarity, seed_number, calc_probs, vectoriser_state], outputs=[output_single_text, output_file, embeddings_state, embeddings_type_state, data_file_name_no_ext_state, topic_model_state, docs_state, vectoriser_state, assigned_topics_state], api_name="topics")
@@ -125,4 +129,6 @@ with block:
     # Visualise topics
     plot_btn.click(fn=visualise_topics, inputs=[topic_model_state, data_state, data_file_name_no_ext_state, low_resource_mode_opt, embeddings_state, in_label, in_colnames, legend_label, sample_slide, visualisation_type_radio, seed_number], outputs=[vis_output_single_text, out_plot_file, plot, plot_2], api_name="plot")
 
-block.queue().launch(debug=True)#, server_name="0.0.0.0", ssl_verify=False, server_port=7860)
+# Launch the Gradio app
+if __name__ == "__main__":
+    block.queue().launch(show_error=True)#, server_name="0.0.0.0", ssl_verify=False, server_port=7860)

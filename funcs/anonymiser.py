@@ -8,19 +8,21 @@ def spacy_model_installed(model_name):
         import en_core_web_sm
         en_core_web_sm.load()
         print("Successfully imported spaCy model")
-        #nlp = spacy.load("en_core_web_sm")
+        nlp = spacy.load("en_core_web_sm")
         #print(nlp._path)
     except:
         download(model_name)
-        spacy.load(model_name)
+        nlp = spacy.load(model_name)
         print("Successfully imported spaCy model")
     #print(nlp._path)
+
+    return nlp
 
 
 #if not is_model_installed(model_name):
 #    os.system(f"python -m spacy download {model_name}")
 model_name = "en_core_web_sm"
-spacy_model_installed(model_name)
+nlp = spacy_model_installed(model_name)
 
 #spacy.load(model_name)
 # Need to overwrite version of gradio present in Huggingface spaces as it doesn't have like buttons/avatars (Oct 2023)
@@ -41,7 +43,15 @@ from presidio_analyzer import AnalyzerEngine, BatchAnalyzerEngine, PatternRecogn
 from presidio_anonymizer import AnonymizerEngine, BatchAnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
-
+# Function to Split Text and Create DataFrame using SpaCy
+def expand_sentences_spacy(df, colname, nlp=nlp):
+    expanded_data = []
+    df = df.reset_index(names='index')
+    for index, row in df.iterrows():
+        doc = nlp(row[colname])
+        for sent in doc.sents:
+            expanded_data.append({'document_index': row['index'], colname: sent.text})
+    return pd.DataFrame(expanded_data)
 
 def anon_consistent_names(df):
     # ## Pick out common names and replace them with the same person value

@@ -144,7 +144,7 @@ def custom_regex_load(in_file):
     regex_file_names = [string for string in file_list if "csv" in string.lower()]
     if regex_file_names:
         regex_file_name = regex_file_names[0]
-        custom_regex = read_file(regex_file_name)
+        custom_regex = pd.read_csv(regex_file_name, low_memory=False, header=None)
         #regex_file_name_no_ext = get_file_path_end(regex_file_name)
 
         output_text = "Data file loaded."

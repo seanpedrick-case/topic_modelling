@@ -9,6 +9,7 @@ import time
 from bertopic import BERTopic
 
 from funcs.clean_funcs import initial_clean
+from funcs.anonymiser import expand_sentences_spacy
 from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs
 from funcs.embeddings import make_or_load_embeddings
 from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, hierarchical_topics_custom, visualize_hierarchy_custom
@@ -47,13 +48,13 @@ today = datetime.now().strftime("%d%m%Y")
 today_rev = datetime.now().strftime("%Y%m%d")
 
 # Load embeddings
-embeddings_name = "BAAI/bge-small-en-v1.5" #"jinaai/jina-embeddings-v2-base-en"
+embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"BAAI/large-small-en-v1.5" #"jinaai/jina-embeddings-v2-base-en"
 
 # LLM model used for representing topics
-hf_model_name =  'second-state/stablelm-2-zephyr-1.6b-GGUF' #'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF'
-hf_model_file =   'stablelm-2-zephyr-1_6b-Q5_K_M.gguf' # 'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf'
+hf_model_name =  "QuantFactory/Phi-3-mini-128k-instruct-GGUF"#'second-state/stablelm-2-zephyr-1.6b-GGUF' #'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF'
+hf_model_file =   "Phi-3-mini-128k-instruct.Q4_K_M.gguf"#'stablelm-2-zephyr-1_6b-Q5_K_M.gguf' # 'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf'
 
-def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text, drop_duplicate_text, anonymise_drop, progress=gr.Progress(track_tqdm=True)):
+def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text, drop_duplicate_text, anonymise_drop, sentence_split_drop, progress=gr.Progress(track_tqdm=True)):
     
     output_text = ""
     output_list = []
@@ -116,6 +117,19 @@ def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text
         anon_toc = time.perf_counter()
         time_out = f"Anonymising text took {anon_toc - anon_tic:0.1f} seconds"
 
+    if sentence_split_drop == "Yes":
+        progress(0.6, desc= "Splitting text into sentences")
+
+        data_file_name_no_ext = data_file_name_no_ext + "_split"
+
+        anon_tic = time.perf_counter()
+        
+        data = expand_sentences_spacy(data, in_colnames_list_first)
+        data = data[data[in_colnames_list_first].str.len() >= 5] # Keep only rows with at least 5 characters
+
+        anon_toc = time.perf_counter()
+        time_out = f"Anonymising text took {anon_toc - anon_tic:0.1f} seconds"
+
     out_data_name = data_file_name_no_ext + "_" + today_rev +  ".csv"
     data.to_csv(out_data_name)
     output_list.append(out_data_name)
@@ -159,15 +173,36 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
     print("Low resource mode: ", low_resource_mode)
 
     if low_resource_mode == "No":
-        print("Using high resource BGE transformer model")
+        print("Using high resource embedding model")
 
-        embedding_model = SentenceTransformer(embeddings_name)       
+        # Define a list of possible local locations to search for the model
+        local_embeddings_locations = [
+            "model/embed/", # Potential local location
+            "/model/embed/", # Potential location in Docker container
+            "/home/user/app/model/embed/" # This is inside a Docker container
+        ]
+
+        # Attempt to load the model from each local location
+        for location in local_embeddings_locations:
+            try:
+                embedding_model = SentenceTransformer(location, truncate_dim=512)
+                print(f"Found local model installation at: {location}")
+                break  # Exit the loop if the model is found
+            except Exception as e:
+                print(f"Failed to load model from {location}: {e}")
+                continue
+        else:
+            # If the loop completes without finding the model in any local location
+            embedding_model = SentenceTransformer(embeddings_name, truncate_dim=512)
+            print("Could not find local model installation. Downloading from Huggingface")
+
+        #embedding_model = SentenceTransformer(embeddings_name, truncate_dim=512)       
 
         # If tfidf embeddings currently exist, wipe these empty
         if embeddings_type_state == "tfidf":
             embeddings_out = np.array([])
 
-        embeddings_type_state = "bge"
+        embeddings_type_state = "large"
 
         # UMAP model uses Bertopic defaults
         umap_model = UMAP(n_neighbors=15, n_components=5, min_dist=0.0, metric='cosine', low_memory=False, random_state=random_seed)
@@ -180,8 +215,8 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
                 TruncatedSVD(100, random_state=random_seed)
                 )
         
-        # If bge embeddings currently exist, wipe these empty, then rename embeddings type
-        if embeddings_type_state == "bge":
+        # If large embeddings currently exist, wipe these empty, then rename embeddings type
+        if embeddings_type_state == "large":
             embeddings_out = np.array([])
 
         embeddings_type_state = "tfidf"
@@ -316,9 +351,9 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
             embeddings_file_name = data_file_name_no_ext + '_' + 'tfidf_embeddings.npz'
         else:
             if embeddings_super_compress == "No":
-                embeddings_file_name = data_file_name_no_ext + '_' + 'bge_embeddings.npz'
+                embeddings_file_name = data_file_name_no_ext + '_' + 'large_embeddings.npz'
             else:
-                embeddings_file_name = data_file_name_no_ext + '_' + 'bge_embeddings_compress.npz'
+                embeddings_file_name = data_file_name_no_ext + '_' + 'large_embeddings_compress.npz'
 
         np.savez_compressed(embeddings_file_name, embeddings_out)
 
@@ -516,7 +551,7 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
 
 
         #try:
-        topics_vis, hierarchy_df, hierarchy_topic_names = visualize_hierarchical_documents_custom(topic_model, docs, label_list, hierarchical_topics, reduced_embeddings=reduced_embeddings, sample = sample_prop, hide_document_hover= False, custom_labels=True, width= 1200, height = 750)
+        topics_vis, hierarchy_df, hierarchy_topic_names = visualize_hierarchical_documents_custom(topic_model, docs, label_list, hierarchical_topics, hide_annotations=True, reduced_embeddings=reduced_embeddings, sample = sample_prop, hide_document_hover= False, custom_labels=True, width= 1200, height = 750)
         topics_vis_2 = visualize_hierarchy_custom(topic_model, hierarchical_topics=hierarchical_topics, width= 1200, height = 750)
 
         # Write hierarchical topics levels to df

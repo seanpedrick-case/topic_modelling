@@ -47,7 +47,7 @@ def make_or_load_embeddings(docs, file_list, embeddings_out, embedding_model, em
                 print("Creating dense embeddings based on transformers model")
 
                 #embeddings_out = embedding_model.encode(sentences=docs, max_length=1024, show_progress_bar = True, batch_size = 32) # For Jina # # 
-                embeddings_out = embedding_model.encode(sentences=docs, show_progress_bar = True, batch_size = 32) # For BGE
+                embeddings_out = embedding_model.encode(sentences=docs, show_progress_bar = True, batch_size = 32, precision="int8") # For large
 
             toc = time.perf_counter()
             time_out = f"The embedding took {toc - tic:0.1f} seconds"
