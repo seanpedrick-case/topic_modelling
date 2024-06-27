@@ -8,12 +8,17 @@ import numpy as np
 import time
 from bertopic import BERTopic
 
-from funcs.clean_funcs import initial_clean
-from funcs.anonymiser import expand_sentences_spacy
-from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs
-from funcs.embeddings import make_or_load_embeddings
-from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, hierarchical_topics_custom, visualize_hierarchy_custom
+from typing import List, Type, Union
+PandasDataFrame = Type[pd.DataFrame]
 
+from funcs.clean_funcs import initial_clean, regex_clean
+from funcs.anonymiser import expand_sentences_spacy
+from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs, output_folder
+from funcs.embeddings import make_or_load_embeddings, torch_device
+from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, hierarchical_topics_custom, visualize_hierarchy_custom
+from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag, random_seed
+
+from sklearn.feature_extraction.text import CountVectorizer
 
 from sentence_transformers import SentenceTransformer
 from sklearn.pipeline import make_pipeline
@@ -22,27 +27,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import funcs.anonymiser as anon
 from umap import UMAP
 
-from torch import cuda, backends, version
-
-# Default seed, can be changed in number selection on options page
-random_seed = 42
-
-# Check for torch cuda
-# If you want to disable cuda for testing purposes
-#os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-
-print("Is CUDA enabled? ", cuda.is_available())
-print("Is a CUDA device available on this computer?", backends.cudnn.enabled)
-if cuda.is_available():
-    torch_device = "gpu"
-    print("Cuda version installed is: ", version.cuda)
-    low_resource_mode = "No"
-    #os.system("nvidia-smi")
-else: 
-    torch_device =  "cpu"
-    low_resource_mode = "Yes"
-
-print("Device used is: ", torch_device)
+# Default options can be changed in number selection on options page
+umap_n_neighbours = 15
+umap_min_dist = 0.0
+umap_metric = 'cosine'
 
 today = datetime.now().strftime("%d%m%Y")
 today_rev = datetime.now().strftime("%Y%m%d")
@@ -54,7 +42,35 @@ embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"BAAI/large-small-en-v1.
 hf_model_name =  "QuantFactory/Phi-3-mini-128k-instruct-GGUF"#'second-state/stablelm-2-zephyr-1.6b-GGUF' #'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF'
 hf_model_file =   "Phi-3-mini-128k-instruct.Q4_K_M.gguf"#'stablelm-2-zephyr-1_6b-Q5_K_M.gguf' # 'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf'
 
-def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text, drop_duplicate_text, anonymise_drop, sentence_split_drop, progress=gr.Progress(track_tqdm=True)):
+# When topic modelling column is chosen, change the default visualisation column to the same
+def change_default_vis_col(in_colnames:List[str]):
+    '''
+    When topic modelling column is chosen, change the default visualisation column to the same
+    '''
+    if in_colnames:
+        return gr.Dropdown(value=in_colnames[0])
+    else:
+        return gr.Dropdown()
+
+def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str, custom_regex: pd.DataFrame, clean_text: str, drop_duplicate_text: str, anonymise_drop: str, sentence_split_drop: str, embeddings_state: dict, progress: gr.Progress = gr.Progress(track_tqdm=True)) -> tuple:
+    """
+    Pre-processes the input data by cleaning text, removing duplicates, anonymizing data, and splitting sentences based on the provided options.
+
+    Args:
+        data (pd.DataFrame): The input data to be cleaned.
+        in_colnames (list): List of column names to be used for cleaning and finding topics.
+        data_file_name_no_ext (str): The base name of the data file without extension.
+        custom_regex (pd.DataFrame): Custom regex patterns for initial cleaning.
+        clean_text (str): Option to clean text ("Yes" or "No").
+        drop_duplicate_text (str): Option to drop duplicate text ("Yes" or "No").
+        anonymise_drop (str): Option to anonymize data ("Yes" or "No").
+        sentence_split_drop (str): Option to split text into sentences ("Yes" or "No").
+        embeddings_state (dict): State of the embeddings.
+        progress (gr.Progress, optional): Progress tracker for the cleaning process.
+
+    Returns:
+        tuple: A tuple containing the error message (if any), cleaned data, updated file name, and embeddings state.
+    """
     
     output_text = ""
     output_list = []
@@ -64,7 +80,7 @@ def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text
     if not in_colnames:
         error_message = "Please enter one column name to use for cleaning and finding topics."
         print(error_message)
-        return error_message, None, data_file_name_no_ext, None, None
+        return error_message, None, data_file_name_no_ext, None, None, embeddings_state
 
     all_tic = time.perf_counter()
 
@@ -77,16 +93,22 @@ def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text
         clean_tic = time.perf_counter()
         print("Starting data clean.")
 
-        data_file_name_no_ext = data_file_name_no_ext + "_clean"
+        data[in_colnames_list_first] = initial_clean(data[in_colnames_list_first], [])
 
-        if not custom_regex.empty:
-            data[in_colnames_list_first] = initial_clean(data[in_colnames_list_first], custom_regex.iloc[:, 0].to_list())
-        else:
-            data[in_colnames_list_first] = initial_clean(data[in_colnames_list_first], [])
+        if '_clean' not in data_file_name_no_ext:
+            data_file_name_no_ext = data_file_name_no_ext + "_clean"
 
         clean_toc = time.perf_counter()
         clean_time_out = f"Cleaning the text took {clean_toc - clean_tic:0.1f} seconds."
         print(clean_time_out)
+
+    # Clean custom regex if exists
+    if not custom_regex.empty:
+        data[in_colnames_list_first] = regex_clean(data[in_colnames_list_first], custom_regex.iloc[:, 0].to_list())
+
+        if '_clean' not in data_file_name_no_ext:
+            data_file_name_no_ext = data_file_name_no_ext + "_clean"
+        
 
     if drop_duplicate_text == "Yes":
         progress(0.3, desc= "Drop duplicates - remove short texts")
@@ -104,7 +126,8 @@ def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text
     if anonymise_drop == "Yes":
         progress(0.6, desc= "Anonymising data")
 
-        data_file_name_no_ext = data_file_name_no_ext + "_anon"
+        if '_anon' not in data_file_name_no_ext:
+            data_file_name_no_ext = data_file_name_no_ext + "_anon"
 
         anon_tic = time.perf_counter()
         
@@ -120,17 +143,19 @@ def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text
     if sentence_split_drop == "Yes":
         progress(0.6, desc= "Splitting text into sentences")
 
-        data_file_name_no_ext = data_file_name_no_ext + "_split"
+        if '_split' not in data_file_name_no_ext:
+            data_file_name_no_ext = data_file_name_no_ext + "_split"
 
         anon_tic = time.perf_counter()
         
         data = expand_sentences_spacy(data, in_colnames_list_first)
-        data = data[data[in_colnames_list_first].str.len() >= 5] # Keep only rows with at least 5 characters
+        data = data[data[in_colnames_list_first].str.len() >= 25] # Keep only rows with at least 25 characters
+        data.reset_index(inplace=True, drop=True)
 
         anon_toc = time.perf_counter()
         time_out = f"Anonymising text took {anon_toc - anon_tic:0.1f} seconds"
 
-    out_data_name = data_file_name_no_ext + "_" + today_rev +  ".csv"
+    out_data_name = output_folder + data_file_name_no_ext + "_" + today_rev +  ".csv"
     data.to_csv(out_data_name)
     output_list.append(out_data_name)
 
@@ -140,13 +165,83 @@ def pre_clean(data, in_colnames, data_file_name_no_ext, custom_regex, clean_text
 
     output_text = "Data clean completed."
     
-    return output_text, output_list, data, data_file_name_no_ext
+    # Overwrite existing embeddings as they will likely have changed
+    return output_text, output_list, data, data_file_name_no_ext, np.array([])
 
-def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, data_file_name_no_ext, custom_labels_df, return_intermediate_files, embeddings_super_compress, low_resource_mode, save_topic_model, embeddings_out, embeddings_type_state, zero_shot_similarity, random_seed, calc_probs, vectoriser_state, progress=gr.Progress(track_tqdm=True)):
+def optimise_zero_shot():
+    """
+    Return options that optimise the topic model to keep only zero-shot topics as the main topics
+    """
+    return gr.Dropdown(value="Yes"), gr.Slider(value=2), gr.Slider(value=2), gr.Slider(value=0.01), gr.Slider(value=0.95), gr.Slider(value=0.55)
 
+def extract_topics(
+    data: pd.DataFrame, 
+    in_files: list, 
+    min_docs_slider: int, 
+    in_colnames: list, 
+    max_topics_slider: int, 
+    candidate_topics: list, 
+    data_file_name_no_ext: str, 
+    custom_labels_df: pd.DataFrame, 
+    return_intermediate_files: str, 
+    embeddings_super_compress: str, 
+    high_quality_mode: str, 
+    save_topic_model: str, 
+    embeddings_out: np.ndarray, 
+    embeddings_type_state: str, 
+    zero_shot_similarity: float,
+    calc_probs: str, 
+    vectoriser_state: CountVectorizer, 
+    min_word_occurence_slider: float, 
+    max_word_occurence_slider: float, 
+    split_sentence_drop: str,
+    random_seed: int = random_seed, 
+    output_folder: str = output_folder, 
+    umap_n_neighbours:int = umap_n_neighbours,
+    umap_min_dist:float = umap_min_dist,
+    umap_metric:str = umap_metric,
+    progress: gr.Progress = gr.Progress(track_tqdm=True)
+) -> tuple:
+    """
+    Extract topics from the given data using various parameters and settings.
+
+    Args:
+        data (pd.DataFrame): The input data.
+        in_files (list): List of input files.
+        min_docs_slider (int): Minimum number of similar documents needed to make a topic.
+        in_colnames (list): List of column names to use for cleaning and finding topics.
+        max_topics_slider (int): Maximum number of topics.
+        candidate_topics (list): List of candidate topics.
+        data_file_name_no_ext (str): Data file name without extension.
+        custom_labels_df (pd.DataFrame): DataFrame containing custom labels.
+        return_intermediate_files (str): Whether to return intermediate files.
+        embeddings_super_compress (str): Whether to round embeddings to three decimal places.
+        high_quality_mode (str): Whether to use high quality (transformers based) embeddings.
+        save_topic_model (str): Whether to save the topic model.
+        embeddings_out (np.ndarray): Output embeddings.
+        embeddings_type_state (str): State of the embeddings type.
+        zero_shot_similarity (float): Zero-shot similarity threshold.
+        random_seed (int): Random seed for reproducibility.
+        calc_probs (str): Whether to calculate all topic probabilities.
+        vectoriser_state (CountVectorizer): Vectorizer state.
+        min_word_occurence_slider (float): Minimum word occurrence slider value.
+        max_word_occurence_slider (float): Maximum word occurrence slider value.
+        split_sentence_drop (str): Whether to split open text into sentences.
+        original_data_state (pd.DataFrame): Original data state.
+        output_folder (str, optional): Output folder. Defaults to output_folder.
+        umap_n_neighbours (int): Nearest neighbours value for UMAP.
+        umap_min_dist (float): Minimum distance for UMAP.
+        umap_metric (str): Metric for UMAP.
+        progress (gr.Progress, optional): Progress tracker. Defaults to gr.Progress(track_tqdm=True).
+
+    Returns:
+        tuple: A tuple containing output text, output list, data, data file name without extension, and an empty numpy array.
+    """
     all_tic = time.perf_counter()
 
     progress(0, desc= "Loading data")
+
+    vectoriser_state = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=min_word_occurence_slider, max_df=max_word_occurence_slider)
 
     output_list = []
     file_list = [string.name for string in in_files]
@@ -170,10 +265,9 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
     # Check if embeddings are being loaded in 
     progress(0.2, desc= "Loading/creating embeddings")
 
-    print("Low resource mode: ", low_resource_mode)
 
-    if low_resource_mode == "No":
-        print("Using high resource embedding model")
+    if high_quality_mode == "Yes":
+        print("Using high quality embedding model")
 
         # Define a list of possible local locations to search for the model
         local_embeddings_locations = [
@@ -205,7 +299,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
         embeddings_type_state = "large"
 
         # UMAP model uses Bertopic defaults
-        umap_model = UMAP(n_neighbors=15, n_components=5, min_dist=0.0, metric='cosine', low_memory=False, random_state=random_seed)
+        umap_model = UMAP(n_neighbors=umap_n_neighbours, n_components=5, min_dist=umap_min_dist, metric=umap_metric, low_memory=False, random_state=random_seed)
 
     else:
         print("Choosing low resource TF-IDF model.")
@@ -223,9 +317,9 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
 
         #umap_model = TruncatedSVD(n_components=5, random_state=random_seed)
         # UMAP model uses Bertopic defaults
-        umap_model = UMAP(n_neighbors=15, n_components=5, min_dist=0.0, metric='cosine', low_memory=True, random_state=random_seed)
+        umap_model = UMAP(n_neighbors=umap_n_neighbours, n_components=5, min_dist=umap_min_dist, metric=umap_metric, low_memory=True, random_state=random_seed)
 
-    embeddings_out = make_or_load_embeddings(docs, file_list, embeddings_out, embedding_model, embeddings_super_compress, low_resource_mode)
+    embeddings_out = make_or_load_embeddings(docs, file_list, embeddings_out, embedding_model, embeddings_super_compress, high_quality_mode)
 
     # This is saved as a Gradio state object
     vectoriser_model = vectoriser_state
@@ -250,7 +344,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
 
             if calc_probs == True:
                 topics_probs_out = pd.DataFrame(topic_model.probabilities_)
-                topics_probs_out_name = "topic_full_probs_" + data_file_name_no_ext + "_" + today_rev + ".csv"
+                topics_probs_out_name = output_folder + "topic_full_probs_" + data_file_name_no_ext + "_" + today_rev + ".csv"
                 topics_probs_out.to_csv(topics_probs_out_name)
                 output_list.append(topics_probs_out_name)
 
@@ -258,19 +352,23 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
             print(error)
             print(fail_error_message)
 
-            return fail_error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model, []
+            out_fail_error_message = '\n'.join([fail_error_message, str(error)])
+
+            return out_fail_error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model, []
     
 
     # Do this if you have pre-defined topics
     else:
-        if low_resource_mode == "Yes":
-            error_message = "Zero shot topic modelling currently not compatible with low-resource embeddings. Please change this option to 'No' on the options tab and retry."
-            print(error_message)
+        #if high_quality_mode == "No":
+        #    error_message = "Zero shot topic modelling currently not compatible with low-resource embeddings. Please change this option to 'No' on the options tab and retry."
+        #    print(error_message)
 
-            return error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model, []
+        #    return error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model, []
 
         zero_shot_topics = read_file(candidate_topics.name)
         zero_shot_topics_lower = list(zero_shot_topics.iloc[:, 0].str.lower())
+
+        print("Zero shot topics are:", zero_shot_topics_lower)
 
  
         try:
@@ -288,7 +386,7 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
 
             if calc_probs == True:
                 topics_probs_out = pd.DataFrame(topic_model.probabilities_)
-                topics_probs_out_name = "topic_full_probs_" + data_file_name_no_ext + "_" + today_rev + ".csv"
+                topics_probs_out_name = output_folder + "topic_full_probs_" + data_file_name_no_ext + "_" + today_rev + ".csv"
                 topics_probs_out.to_csv(topics_probs_out_name)
                 output_list.append(topics_probs_out_name)
 
@@ -296,13 +394,13 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
             print("An exception occurred:", error)
             print(fail_error_message)
 
-            return fail_error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model, []
+            out_fail_error_message = '\n'.join([fail_error_message, str(error)])
+
+            return out_fail_error_message, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_model, []
 
         # For some reason, zero topic modelling exports assigned topics as a np.array instead of a list. Converting it back here.
         if isinstance(assigned_topics, np.ndarray):
             assigned_topics = assigned_topics.tolist()
-
-       
 
          # Zero shot modelling is a model merge, which wipes the c_tf_idf part of the resulting model completely. To get hierarchical modelling to work, we need to recreate this part of the model with the CountVectorizer options used to create the initial model. Since with zero shot, we are merging two models that have exactly the same set of documents, the vocubulary should be the same, and so recreating the cf_tf_idf component in this way shouldn't be a problem. Discussion here, and below based on Maarten's suggested code: https://github.com/MaartenGr/BERTopic/issues/1700     
 
@@ -312,15 +410,11 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
         documents_per_topic = doc_dets.groupby(['Topic'], as_index=False).agg({'Document': ' '.join})
 
         # Assign CountVectorizer to merged model
-
         topic_model.vectorizer_model = vectoriser_model
 
         # Re-calculate c-TF-IDF
         c_tf_idf, _ = topic_model._c_tf_idf(documents_per_topic)
         topic_model.c_tf_idf_ = c_tf_idf
-
-        ###
-
 
     # Check we have topics
     if not assigned_topics:
@@ -329,8 +423,14 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
         print("Topic model created.")
 
     # Tidy up topic label format a bit to have commas and spaces by default
-    new_topic_labels = topic_model.generate_topic_labels(nr_words=3, separator=", ")
-    topic_model.set_topic_labels(new_topic_labels)
+    if not candidate_topics:
+        print("Zero shot topics found, so not renaming")
+        new_topic_labels = topic_model.generate_topic_labels(nr_words=3, separator=", ")
+        topic_model.set_topic_labels(new_topic_labels)
+    if candidate_topics:
+        print("Custom labels:", topic_model.custom_labels_)
+        print("Topic labels:", topic_model.topic_labels_)
+        topic_model.set_topic_labels(topic_model.topic_labels_)
 
     # Replace current topic labels if new ones loaded in
     if not custom_labels_df.empty:
@@ -342,18 +442,18 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
     print("Custom topics: ", topic_model.custom_labels_)
 
     # Outputs
-    output_list, output_text = save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model)
+    output_list, output_text = save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model, data, split_sentence_drop)
 
      # If you want to save your embedding files
     if return_intermediate_files == "Yes":
         print("Saving embeddings to file")
-        if low_resource_mode == "Yes":
-            embeddings_file_name = data_file_name_no_ext + '_' + 'tfidf_embeddings.npz'
+        if high_quality_mode == "Yes":
+            embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'tfidf_embeddings.npz'
         else:
             if embeddings_super_compress == "No":
-                embeddings_file_name = data_file_name_no_ext + '_' + 'large_embeddings.npz'
+                embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'large_embeddings.npz'
             else:
-                embeddings_file_name = data_file_name_no_ext + '_' + 'large_embeddings_compress.npz'
+                embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'large_embeddings_compress.npz'
 
         np.savez_compressed(embeddings_file_name, embeddings_out)
 
@@ -365,7 +465,25 @@ def extract_topics(data, in_files, min_docs_slider, in_colnames, max_topics_slid
 
     return output_text, output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, topic_model, docs, vectoriser_model, assigned_topics
 
-def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, assigned_topics, vectoriser_model, save_topic_model, progress=gr.Progress(track_tqdm=True)):
+def reduce_outliers(topic_model: BERTopic, docs: List[str], embeddings_out: np.ndarray, data_file_name_no_ext: str, assigned_topics: Union[np.ndarray, List[int]], vectoriser_model: CountVectorizer, save_topic_model: str, split_sentence_drop: str, data: PandasDataFrame, progress: gr.Progress = gr.Progress(track_tqdm=True)) -> tuple:
+    """
+    Reduce outliers in the topic model and update the topic representation.
+
+    Args:
+        topic_model (BERTopic): The BERTopic topic model to be used.
+        docs (List[str]): List of documents.
+        embeddings_out (np.ndarray): Output embeddings.
+        data_file_name_no_ext (str): Data file name without extension.
+        assigned_topics (Union[np.ndarray, List[int]]): Assigned topics.
+        vectoriser_model (CountVectorizer): Vectorizer model.
+        save_topic_model (str): Whether to save the topic model.
+        split_sentence_drop (str): Dropdown result indicating whether sentences have been split.
+        data (PandasDataFrame): The input dataframe
+        progress (gr.Progress, optional): Progress tracker. Defaults to gr.Progress(track_tqdm=True).
+
+    Returns:
+        tuple: A tuple containing the output text, output list, and the updated topic model.
+    """
 
     progress(0, desc= "Preparing data")
 
@@ -373,12 +491,8 @@ def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, as
 
     all_tic = time.perf_counter()
 
-    # This step not necessary?
-    #assigned_topics, probs = topic_model.fit_transform(docs, embeddings_out)
-
     if isinstance(assigned_topics, np.ndarray):
         assigned_topics = assigned_topics.tolist()
-
 
     # Reduce outliers if required, then update representation
     progress(0.2, desc= "Reducing outliers")
@@ -397,20 +511,9 @@ def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, as
 
     print("Finished reducing outliers.")
 
-    #progress(0.7, desc= "Replacing topic names with LLMs if necessary")
-
-    #topic_dets = topic_model.get_topic_info()
-
-    # # Replace original labels with LLM labels
-    # if "LLM" in topic_model.get_topic_info().columns:
-    #     llm_labels = [label[0][0].split("\n")[0] for label in topic_model.get_topics(full=True)["LLM"].values()]
-    #     topic_model.set_topic_labels(llm_labels)
-    # else:
-    #     topic_model.set_topic_labels(list(topic_dets["Name"]))
-
     # Outputs   
     progress(0.9, desc= "Saving to file")
-    output_list, output_text = save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model)
+    output_list, output_text = save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model, data, split_sentence_drop)
 
     all_toc = time.perf_counter()
     time_out = f"All processes took {all_toc - all_tic:0.1f} seconds"
@@ -418,16 +521,35 @@ def reduce_outliers(topic_model, docs, embeddings_out, data_file_name_no_ext, as
     
     return output_text, output_list, topic_model
 
-def represent_topics(topic_model, docs, data_file_name_no_ext, low_resource_mode, save_topic_model, representation_type, vectoriser_model, progress=gr.Progress(track_tqdm=True)):
-    from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag
+def represent_topics(topic_model: BERTopic, docs: List[str], data_file_name_no_ext: str, high_quality_mode: str, save_topic_model: str, representation_type: str, vectoriser_model: CountVectorizer, split_sentence_drop: str, data: PandasDataFrame, progress: gr.Progress = gr.Progress(track_tqdm=True)) -> tuple:
+    """
+    Represents topics using the specified representation model and updates the topic labels accordingly.
+
+    Args:
+        topic_model (BERTopic): The topic model to be used.
+        docs (List[str]): List of documents to be processed.
+        data_file_name_no_ext (str): The base name of the data file without extension.
+        high_quality_mode (str): Whether to use high quality (transformers based) embeddings.
+        save_topic_model (str): Whether to save the topic model.
+        representation_type (str): The type of representation model to be used.
+        vectoriser_model (CountVectorizer): The vectorizer model to be used.
+        split_sentence_drop (str): Dropdown result indicating whether sentences have been split.
+        data (PandasDataFrame): The input dataframe
+        progress (gr.Progress, optional): Progress tracker for the process. Defaults to gr.Progress(track_tqdm=True).
+
+    Returns:
+        tuple: A tuple containing the output text, output list, and the updated topic model.
+    """
 
     output_list = []
 
     all_tic = time.perf_counter()
 
-    progress(0.1, desc= "Loading model and creating new representation")
+    # Load in representation model
 
-    representation_model = create_representation_model(representation_type, llm_config, hf_model_name, hf_model_file, chosen_start_tag, low_resource_mode)  
+    progress(0.1, desc= "Loading model and creating new topic representation")
+
+    representation_model = create_representation_model(representation_type, llm_config, hf_model_name, hf_model_file, chosen_start_tag, high_quality_mode)  
 
     progress(0.3, desc= "Updating existing topics")
     topic_model.update_topics(docs, vectorizer_model=vectoriser_model, representation_model=representation_model)
@@ -439,7 +561,7 @@ def represent_topics(topic_model, docs, data_file_name_no_ext, low_resource_mode
         llm_labels = [label[0].split("\n")[0] for label in topic_dets["LLM"]]
         topic_model.set_topic_labels(llm_labels)
 
-        label_list_file_name = data_file_name_no_ext + '_llm_topic_list_' + today_rev + '.csv'
+        label_list_file_name = output_folder + data_file_name_no_ext + '_llm_topic_list_' + today_rev + '.csv'
 
         llm_labels_df = pd.DataFrame(data={"Label":llm_labels})
         llm_labels_df.to_csv(label_list_file_name, index=None)
@@ -452,7 +574,7 @@ def represent_topics(topic_model, docs, data_file_name_no_ext, low_resource_mode
 
     # Outputs
     progress(0.8, desc= "Saving outputs")
-    output_list, output_text = save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model)
+    output_list, output_text = save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model, data, split_sentence_drop)
 
     all_toc = time.perf_counter()
     time_out = f"All processes took {all_toc - all_tic:0.1f} seconds"
@@ -460,11 +582,51 @@ def represent_topics(topic_model, docs, data_file_name_no_ext, low_resource_mode
 
     return output_text, output_list, topic_model
 
-def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode,  embeddings_out, in_label, in_colnames, legend_label, sample_prop, visualisation_type_radio, random_seed,  progress=gr.Progress(track_tqdm=True)):
+def visualise_topics(
+    topic_model: BERTopic, 
+    data: pd.DataFrame, 
+    data_file_name_no_ext: str, 
+    high_quality_mode: str,  
+    embeddings_out: np.ndarray, 
+    in_label: List[str], 
+    in_colnames: List[str], 
+    legend_label: str, 
+    sample_prop: float, 
+    visualisation_type_radio: str, 
+    random_seed: int = random_seed, 
+    umap_n_neighbours: int = umap_n_neighbours, 
+    umap_min_dist: float = umap_min_dist, 
+    umap_metric: str = umap_metric, 
+    progress: gr.Progress = gr.Progress(track_tqdm=True)
+) -> tuple:
+    """
+    Visualize topics using the provided topic model and data.
+
+    Args:
+        topic_model (BERTopic): The topic model to be used for visualization.
+        data (pd.DataFrame): The input data containing the documents.
+        data_file_name_no_ext (str): The base name of the data file without extension.
+        high_quality_mode (str): Whether to use high quality mode for embeddings.
+        embeddings_out (np.ndarray): The output embeddings.
+        in_label (List[str]): List of labels for the input data.
+        in_colnames (List[str]): List of column names in the input data.
+        legend_label (str): The label to be used in the legend.
+        sample_prop (float): The proportion of data to sample for visualization.
+        visualisation_type_radio (str): The type of visualization to be used.
+        random_seed (int, optional): Random seed for reproducibility. Defaults to random_seed.
+        umap_n_neighbours (int, optional): Number of neighbors for UMAP. Defaults to umap_n_neighbours.
+        umap_min_dist (float, optional): Minimum distance for UMAP. Defaults to umap_min_dist.
+        umap_metric (str, optional): Metric for UMAP. Defaults to umap_metric.
+        progress (gr.Progress, optional): Progress tracker for the process. Defaults to gr.Progress(track_tqdm=True).
+
+    Returns:
+        tuple: A tuple containing the output message, output list, reduced embeddings, and topic model.
+    """
 
     progress(0, desc= "Preparing data for visualisation")
 
     output_list = []
+    output_message = []
     vis_tic = time.perf_counter()
 
     
@@ -500,30 +662,37 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
             topic_model.set_topic_labels(labels)
 
     # Pre-reduce embeddings for visualisation purposes
-    if low_resource_mode == "No":
-        reduced_embeddings = UMAP(n_neighbors=15, n_components=2, min_dist=0.0, metric='cosine', random_state=random_seed).fit_transform(embeddings_out)
+    if high_quality_mode == "Yes":
+        reduced_embeddings = UMAP(n_neighbors=umap_n_neighbours, n_components=2, min_dist=umap_min_dist, metric=umap_metric, random_state=random_seed).fit_transform(embeddings_out)
     else:
         reduced_embeddings = TruncatedSVD(2, random_state=random_seed).fit_transform(embeddings_out)
 
-    progress(0.5, desc= "Creating visualisation (this can take a while)")
+    progress(0.3, desc= "Creating visualisations")
     # Visualise the topics:
     
-    print("Creating visualisation")
-
-    # "Topic document graph", "Hierarchical view"
+    print("Creating visualisations")
 
     if visualisation_type_radio == "Topic document graph":
-        topics_vis = visualize_documents_custom(topic_model, docs, hover_labels = label_list, reduced_embeddings=reduced_embeddings, hide_annotations=True, hide_document_hover=False, custom_labels=True, sample = sample_prop, width= 1200, height = 750)
+        try:
+            topics_vis = visualize_documents_custom(topic_model, docs, hover_labels = label_list, reduced_embeddings=reduced_embeddings, hide_annotations=True, hide_document_hover=False, custom_labels=True, sample = sample_prop, width= 1200, height = 750)
 
-        topics_vis_name = data_file_name_no_ext + '_' + 'vis_topic_docs_' + today_rev + '.html'
-        topics_vis.write_html(topics_vis_name)
-        output_list.append(topics_vis_name)
+            topics_vis_name = output_folder + data_file_name_no_ext + '_' + 'vis_topic_docs_' + today_rev + '.html'
+            topics_vis.write_html(topics_vis_name)
+            output_list.append(topics_vis_name)
+        except Exception as e:
+            print(e)
+            output_message = str(e)
+            return output_message, output_list, None, None
 
-        topics_vis_2 = topic_model.visualize_heatmap(custom_labels=True, width= 1200, height = 1200)
+        try:
+            topics_vis_2 = topic_model.visualize_heatmap(custom_labels=True, width= 1200, height = 1200)
 
-        topics_vis_2_name = data_file_name_no_ext + '_' + 'vis_heatmap_' + today_rev + '.html'
-        topics_vis_2.write_html(topics_vis_2_name)
-        output_list.append(topics_vis_2_name)
+            topics_vis_2_name = output_folder + data_file_name_no_ext + '_' + 'vis_heatmap_' + today_rev + '.html'
+            topics_vis_2.write_html(topics_vis_2_name)
+            output_list.append(topics_vis_2_name)
+        except Exception as e:
+            print(e)
+            output_message.append(str(e))
 
     elif visualisation_type_radio == "Hierarchical view":
 
@@ -532,7 +701,7 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
         # Print topic tree - may get encoding errors, so doing try except
         try:
             tree = topic_model.get_topic_tree(hierarchical_topics, tight_layout = True)
-            tree_name = data_file_name_no_ext + '_' + 'vis_hierarchy_tree_' + today_rev + '.txt'
+            tree_name = output_folder + data_file_name_no_ext + '_' + 'vis_hierarchy_tree_' + today_rev + '.txt'
 
             with open(tree_name, "w") as file:
                 # Write the string to the file
@@ -540,59 +709,71 @@ def visualise_topics(topic_model, data, data_file_name_no_ext, low_resource_mode
 
             output_list.append(tree_name)
 
-        except Exception as error:
-            print("An exception occurred when making topic tree document, skipped:", error)
+        except Exception as e:
+            new_out_message = "An exception occurred when making topic tree document, skipped:" + str(e)
+            output_message.append(str(new_out_message))
+            print(new_out_message)
 
 
         # Save new hierarchical topic model to file
-        hierarchical_topics_name = data_file_name_no_ext + '_' + 'vis_hierarchy_topics_dist_' + today_rev + '.csv'
-        hierarchical_topics.to_csv(hierarchical_topics_name, index = None)
-        output_list.append(hierarchical_topics_name)
+        try:
+            hierarchical_topics_name = output_folder + data_file_name_no_ext + '_' + 'vis_hierarchy_topics_dist_' + today_rev + '.csv'
+            hierarchical_topics.to_csv(hierarchical_topics_name, index = None)
+            output_list.append(hierarchical_topics_name)
 
-
-        #try:
-        topics_vis, hierarchy_df, hierarchy_topic_names = visualize_hierarchical_documents_custom(topic_model, docs, label_list, hierarchical_topics, hide_annotations=True, reduced_embeddings=reduced_embeddings, sample = sample_prop, hide_document_hover= False, custom_labels=True, width= 1200, height = 750)
-        topics_vis_2 = visualize_hierarchy_custom(topic_model, hierarchical_topics=hierarchical_topics, width= 1200, height = 750)
+            topics_vis, hierarchy_df, hierarchy_topic_names = visualize_hierarchical_documents_custom(topic_model, docs, label_list, hierarchical_topics, hide_annotations=True, reduced_embeddings=reduced_embeddings, sample = sample_prop, hide_document_hover= False, custom_labels=True, width= 1200, height = 750)
+            topics_vis_2 = visualize_hierarchy_custom(topic_model, hierarchical_topics=hierarchical_topics, width= 1200, height = 750)
+        except Exception as e:
+            new_out_message = "An exception occurred when making hierarchical topic visualisation:" + str(e) + ". Maybe your model doesn't have enough topics to create a hierarchy?"
+            output_message.append(str(new_out_message))
+            print(new_out_message)
+            return new_out_message, output_list, None, None
 
         # Write hierarchical topics levels to df
-        hierarchy_df_name = data_file_name_no_ext + '_' + 'hierarchy_topics_df_' + today_rev + '.csv'
+        hierarchy_df_name = output_folder + data_file_name_no_ext + '_' + 'hierarchy_topics_df_' + today_rev + '.csv'
         hierarchy_df.to_csv(hierarchy_df_name, index = None)
         output_list.append(hierarchy_df_name)
 
         # Write hierarchical topics names to df
-        hierarchy_topic_names_name = data_file_name_no_ext + '_' + 'hierarchy_topics_names_' + today_rev + '.csv'
+        hierarchy_topic_names_name = output_folder + data_file_name_no_ext + '_' + 'hierarchy_topics_names_' + today_rev + '.csv'
         hierarchy_topic_names.to_csv(hierarchy_topic_names_name, index = None)
         output_list.append(hierarchy_topic_names_name)
 
-        #except:
-        #    error_message = "Visualisation preparation failed. Perhaps you need more topics to create the full hierarchy (more than 10)?"
-        #    return error_message, output_list, None, None
 
-        topics_vis_name = data_file_name_no_ext + '_' + 'vis_hierarchy_topic_doc_' + today_rev + '.html'
+        topics_vis_name = output_folder + data_file_name_no_ext + '_' + 'vis_hierarchy_topic_doc_' + today_rev + '.html'
         topics_vis.write_html(topics_vis_name)
         output_list.append(topics_vis_name)
 
-        topics_vis_2_name = data_file_name_no_ext + '_' + 'vis_hierarchy_' + today_rev + '.html'
+        topics_vis_2_name = output_folder + data_file_name_no_ext + '_' + 'vis_hierarchy_' + today_rev + '.html'
         topics_vis_2.write_html(topics_vis_2_name)
         output_list.append(topics_vis_2_name)
 
     all_toc = time.perf_counter()
-    time_out = f"Creating visualisation took {all_toc - vis_tic:0.1f} seconds"
-    print(time_out)
+    output_message.append(f"Creating visualisation took {all_toc - vis_tic:0.1f} seconds")
+    print(output_message)
 
-    return time_out, output_list, topics_vis, topics_vis_2
+    return '\n'.join(output_message), output_list, topics_vis, topics_vis_2
 
-def save_as_pytorch_model(topic_model, data_file_name_no_ext , progress=gr.Progress(track_tqdm=True)):
+def save_as_pytorch_model(topic_model: BERTopic, data_file_name_no_ext:str, progress=gr.Progress(track_tqdm=True)):
+    """
+    Reduce outliers in the topic model and update the topic representation.
+
+    Args:
+        topic_model (BERTopic): The BERTopic topic model to be used.
+        data_file_name_no_ext (str): Document file name.
+    Returns:
+        tuple: A tuple containing the output text and output list.
+    """
+    output_list = []
+    output_message = ""
 
     if not topic_model:
-        return "No Pytorch model found.", None
+        output_message = "No Pytorch model found."
+        return output_message, None
 
     progress(0, desc= "Saving topic model in Pytorch format")
 
-    output_list = []
-
-
-    topic_model_save_name_folder = "output_model/" + data_file_name_no_ext + "_topics_" + today_rev# + ".safetensors"
+    topic_model_save_name_folder = output_folder + data_file_name_no_ext + "_topics_" + today_rev# + ".safetensors"
     topic_model_save_name_zip = topic_model_save_name_folder + ".zip"
 
     # Clear folder before replacing files
@@ -600,9 +781,10 @@ def save_as_pytorch_model(topic_model, data_file_name_no_ext , progress=gr.Progr
 
     topic_model.save(topic_model_save_name_folder, serialization='pytorch', save_embedding_model=True, save_ctfidf=False)
 
-    # Zip file example
-    
+    # Zip file example    
     zip_folder(topic_model_save_name_folder, topic_model_save_name_zip)
     output_list.append(topic_model_save_name_zip)
 
-    return "Model saved in Pytorch format.", output_list
+    output_message = "Model saved in Pytorch format."
+
+    return output_message, output_list

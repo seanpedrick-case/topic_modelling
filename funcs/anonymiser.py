@@ -46,7 +46,7 @@ from presidio_anonymizer.entities import OperatorConfig
 # Function to Split Text and Create DataFrame using SpaCy
 def expand_sentences_spacy(df, colname, nlp=nlp):
     expanded_data = []
-    df = df.reset_index(names='index')
+    df = df.drop('index', axis = 1, errors="ignore").reset_index(names='index')
     for index, row in df.iterrows():
         doc = nlp(row[colname])
         for sent in doc.sents:

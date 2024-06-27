@@ -3,28 +3,25 @@ from bertopic.representation import LlamaCPP
 from llama_cpp import Llama
 from pydantic import BaseModel
 import torch.cuda
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import hf_hub_download
 
 from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, BaseRepresentation
-from funcs.prompts import capybara_prompt, capybara_start, open_hermes_prompt, open_hermes_start, stablelm_prompt, stablelm_start, phi3_prompt, phi3_start
-
-random_seed = 42
+from funcs.embeddings import torch_device
+from funcs.prompts import phi3_prompt, phi3_start
 
 chosen_prompt = phi3_prompt #open_hermes_prompt # stablelm_prompt 
 chosen_start_tag =  phi3_start #open_hermes_start # stablelm_start
 
+random_seed = 42
 
 # Currently set n_gpu_layers to 0 even with cuda due to persistent bugs in implementation with cuda
-if torch.cuda.is_available():
-    torch_device = "gpu"
+print("torch device for representation functions:", torch_device)
+if torch_device == "gpu":
     low_resource_mode = "No"
-    n_gpu_layers = 100
-else: 
-    torch_device =  "cpu"
+    n_gpu_layers = -1 # i.e. all
+else: #     torch_device =  "cpu"
     low_resource_mode = "Yes"
     n_gpu_layers = 0
-
-#low_resource_mode = "No" # Override for testing
 
 #print("Running on device:", torch_device)
 n_threads = torch.get_num_threads()
@@ -37,7 +34,7 @@ top_p: float = 1
 repeat_penalty: float = 1.1
 last_n_tokens_size: int = 128
 max_tokens: int = 500
-seed: int = 42
+seed: int = random_seed
 reset: bool = True
 stream: bool = False
 n_threads: int = n_threads
@@ -83,15 +80,25 @@ llm_config = LLamacppInitConfigGpu(last_n_tokens_size=last_n_tokens_size,
     trust_remote_code=trust_remote_code)
 
 ## Create representation model parameters ##
-# KeyBERT
 keybert = KeyBERTInspired(random_state=random_seed)
-# MMR
 mmr = MaximalMarginalRelevance(diversity=0.5)
-
 base_rep = BaseRepresentation()
 
 # Find model file
-def find_model_file(hf_model_name, hf_model_file, search_folder, sub_folder):
+def find_model_file(hf_model_name: str, hf_model_file: str, search_folder: str, sub_folder: str) -> str:
+    """
+    Finds the specified model file within the given search folder and subfolder.
+
+    Args:
+        hf_model_name (str): The name of the Hugging Face model.
+        hf_model_file (str): The specific file name of the model to find.
+        search_folder (str): The base folder to start the search.
+        sub_folder (str): The subfolder within the search folder to look into.
+
+    Returns:
+        str: The path to the found model file, or None if the file is not found.
+    """
+
     hf_loc = search_folder #os.environ["HF_HOME"]
     hf_sub_loc = search_folder + sub_folder #os.environ["HF_HOME"] 
 
@@ -116,17 +123,27 @@ def find_model_file(hf_model_name, hf_model_file, search_folder, sub_folder):
     
     return found_file
 
+def create_representation_model(representation_type: str, llm_config: dict, hf_model_name: str, hf_model_file: str, chosen_start_tag: str, low_resource_mode: bool) -> dict:
+    """
+    Creates a representation model based on the specified type and configuration.
 
-def create_representation_model(representation_type, llm_config, hf_model_name, hf_model_file, chosen_start_tag, low_resource_mode):
+    Args:
+        representation_type (str): The type of representation model to create (e.g., "LLM", "KeyBERT").
+        llm_config (dict): Configuration settings for the LLM model.
+        hf_model_name (str): The name of the Hugging Face model.
+        hf_model_file (str): The specific file name of the model to find.
+        chosen_start_tag (str): The start tag to use for the model.
+        low_resource_mode (bool): Whether to enable low resource mode.
+
+    Returns:
+        dict: A dictionary containing the created representation model.
+    """
 
     if representation_type == "LLM":
         print("Generating LLM representation")
         # Use llama.cpp to load in model
 
-        #    del os.environ["HF_HOME"]     
-
         # Check for HF_HOME environment variable and supply a default value if it's not found (typical location for huggingface models)
-        # Get HF_HOME environment variable or default to "~/.cache/huggingface/hub"
         base_folder = "model" #"~/.cache/huggingface/hub"
         hf_home_value = os.getenv("HF_HOME", base_folder)
 
@@ -158,9 +175,10 @@ def create_representation_model(representation_type, llm_config, hf_model_name, 
 
         print("Loading representation model with", llm_config.n_gpu_layers, "layers allocated to GPU.")
 
+        #llm_config.n_gpu_layers
         llm = Llama(model_path=found_file, stop=chosen_start_tag, n_gpu_layers=llm_config.n_gpu_layers, n_ctx=llm_config.n_ctx,seed=seed) #**llm_config.model_dump())#  rope_freq_scale=0.5,
         #print(llm.n_gpu_layers)
-        print("Chosen prompt:", chosen_prompt)
+        #print("Chosen prompt:", chosen_prompt)
         llm_model = LlamaCPP(llm, prompt=chosen_prompt)#, **gen_config.model_dump())
 
         # All representation models
@@ -180,15 +198,6 @@ def create_representation_model(representation_type, llm_config, hf_model_name, 
     else:
         print("Generating default representation type")
         representation_model = {"Default":base_rep}
-
-    # Deprecated example using CTransformers. This package is not really used anymore
-    #model = AutoModelForCausalLM.from_pretrained('NousResearch/Nous-Capybara-7B-V1.9-GGUF', model_type='mistral', model_file='Capybara-7B-V1.9-Q5_K_M.gguf', hf=True, **vars(llm_config))
-    #tokenizer = AutoTokenizer.from_pretrained("NousResearch/Nous-Capybara-7B-V1.9")
-    #generator = pipeline(task="text-generation", model=model, tokenizer=tokenizer)
-
-    # Text generation with Llama 2
-    #mistral_capybara = TextGeneration(generator, prompt=capybara_prompt)
-    #mistral_hermes = TextGeneration(generator, prompt=open_hermes_prompt)
         
     return representation_model
 

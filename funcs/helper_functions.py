@@ -10,33 +10,70 @@ import numpy as np
 from bertopic import BERTopic
 from datetime import datetime
 
+from typing import List, Tuple
+
 today = datetime.now().strftime("%d%m%Y")
 today_rev = datetime.now().strftime("%Y%m%d")
 
-# Log terminal output: https://github.com/gradio-app/gradio/issues/2362
-class Logger:
-    def __init__(self, filename):
-        self.terminal = sys.stdout
-        self.log = open(filename, "w")
+def get_or_create_env_var(var_name:str, default_value:str) -> str:
+    # Get the environment variable if it exists
+    value = os.environ.get(var_name)
+    
+    # If it doesn't exist, set it to the default value
+    if value is None:
+        os.environ[var_name] = default_value
+        value = default_value
+    
+    return value
 
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
-        
-    def flush(self):
-        self.terminal.flush()
-        self.log.flush()
-        
-    def isatty(self):
-        return False    
+# Retrieving or setting output folder
+env_var_name = 'GRADIO_OUTPUT_FOLDER'
+default_value = 'output/'
 
-#sys.stdout = Logger("output.log")
+output_folder = get_or_create_env_var(env_var_name, default_value)
+print(f'The value of {env_var_name} is {output_folder}')
 
-# def read_logs():
-#     sys.stdout.flush()
-#     with open("output.log", "r") as f:
-#         return f.read()
+def ensure_output_folder_exists():
+    """Checks if the 'output/' folder exists, creates it if not."""
 
+    folder_name = "output/"
+
+    if not os.path.exists(folder_name):
+        # Create the folder if it doesn't exist
+        os.makedirs(folder_name)
+        print(f"Created the 'output/' folder.")
+    else:
+        print(f"The 'output/' folder already exists.")
+
+def get_connection_params(request: gr.Request):
+    '''
+    Get connection parameter values from request object.
+    '''
+    if request:
+
+        # print("Request headers dictionary:", request.headers)
+        # print("All host elements", request.client)           
+        # print("IP address:", request.client.host)
+        # print("Query parameters:", dict(request.query_params))
+        print("Session hash:", request.session_hash)
+
+        if 'x-cognito-id' in request.headers:
+            out_session_hash = request.headers['x-cognito-id']
+            base_folder = "user-files/"
+            #print("Cognito ID found:", out_session_hash)
+
+        else:
+            out_session_hash = request.session_hash
+            base_folder = "temp-files/"
+            #print("Cognito ID not found. Using session hash as save folder.")
+
+        output_folder = base_folder + out_session_hash + "/"
+        #print("S3 output folder is: " + "s3://" + bucket_name + "/" + output_folder)
+
+        return out_session_hash
+    else:
+        print("No session parameters found.")
+        return ""
 
 def detect_file_type(filename):
     """Detect the file type based on its extension."""
@@ -130,7 +167,7 @@ def initial_file_load(in_file):
    
         
     #The np.array([]) at the end is for clearing the embedding state when a new file is loaded
-    return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df, output_text, topic_model, embeddings, data_file_name_no_ext, custom_labels
+    return gr.Dropdown(choices=concat_choices), gr.Dropdown(choices=concat_choices), df, output_text, topic_model, embeddings, data_file_name_no_ext, custom_labels, df
 
 def custom_regex_load(in_file):
     '''
@@ -157,8 +194,6 @@ def custom_regex_load(in_file):
        
     return output_text, custom_regex
 
-
-
 def get_file_path_end(file_path):
     # First, get the basename of the file (e.g., "example.txt" from "/path/to/example.txt")
     basename = os.path.basename(file_path)
@@ -177,15 +212,7 @@ def get_file_path_end_with_ext(file_path):
 
     return filename_end
 
-def dummy_function(in_colnames):
-    """
-    A dummy function that exists just so that dropdown updates work correctly.
-    """
-    return None
-
 # Zip the above to export file
-
-
 def zip_folder(folder_path, output_zip_file):
     # Create a ZipFile object in write mode
     with zipfile.ZipFile(output_zip_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -215,59 +242,121 @@ def delete_files_in_folder(folder_path):
         except Exception as e:
             print(f"Failed to delete {file_path}. Reason: {e}")
 
+def save_topic_outputs(topic_model: BERTopic, data_file_name_no_ext: str, output_list: List[str], docs: List[str], save_topic_model: bool, prepared_docs: pd.DataFrame, split_sentence_drop: str, output_folder: str = output_folder, progress: gr.Progress = gr.Progress()) -> Tuple[List[str], str]:
+    """
+    Save the outputs of a topic model to specified files.
 
-def save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model, progress=gr.Progress()):
+    Args:
+        topic_model (BERTopic): The topic model object.
+        data_file_name_no_ext (str): The base name of the data file without extension.
+        output_list (List[str]): List to store the output file names.
+        docs (List[str]): List of documents.
+        save_topic_model (bool): Flag to save the topic model.
+        prepared_docs (pd.DataFrame): DataFrame containing prepared documents.
+        split_sentence_drop (str): Option to split sentences ("Yes" or "No").
+        output_folder (str, optional): Folder to save the output files. Defaults to output_folder.
+        progress (gr.Progress, optional): Progress tracker. Defaults to gr.Progress().
+
+    Returns:
+        Tuple[List[str], str]: A tuple containing the list of output file names and a status message.
+    """
         
-        progress(0.7, desc= "Checking data")
+    progress(0.7, desc= "Checking data")
 
-        topic_dets = topic_model.get_topic_info()
+    topic_dets = topic_model.get_topic_info()
 
-        if topic_dets.shape[0] == 1:
-            topic_det_output_name = "topic_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
-            topic_dets.to_csv(topic_det_output_name)
-            output_list.append(topic_det_output_name)
-
-            return output_list, "No topics found, original file returned"
-
-        
-        progress(0.8, desc= "Saving output")
-        
-        topic_det_output_name = "topic_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
+    if topic_dets.shape[0] == 1:
+        topic_det_output_name = output_folder + "topic_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
         topic_dets.to_csv(topic_det_output_name)
         output_list.append(topic_det_output_name)
 
-        doc_det_output_name = "doc_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
-        doc_dets = topic_model.get_document_info(docs)[["Document",	"Topic", "Name", "Probability", "Representative_document"]]
-        doc_dets.to_csv(doc_det_output_name)
-        output_list.append(doc_det_output_name)
+        return output_list, "No topics found, original file returned"
 
-        if "CustomName" in topic_dets.columns:
-            topics_text_out_str = str(topic_dets["CustomName"])
-        else:
-            topics_text_out_str = str(topic_dets["Name"])
-        output_text = "Topics: " + topics_text_out_str
+    progress(0.8, desc= "Saving output")
     
-        # Save topic model to file
-        if save_topic_model == "Yes":
-            print("Saving BERTopic model in .pkl format.")
+    topic_det_output_name = output_folder + "topic_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
+    topic_dets.to_csv(topic_det_output_name)
+    output_list.append(topic_det_output_name)
 
-            folder_path = "output_model/"
+    doc_det_output_name = output_folder + "doc_details_" + data_file_name_no_ext + "_" + today_rev + ".csv"
 
-            if not os.path.exists(folder_path):
-                # Create the folder
-                os.makedirs(folder_path)
+    ## Check that the following columns exist in the dataframe, keep only the ones that exist
+    columns_to_check = ["Document",	"Topic", "Name", "Probability", "Representative_document"]
 
-            topic_model_save_name_pkl = folder_path + data_file_name_no_ext + "_topics_" + today_rev + ".pkl"# + ".safetensors"
-            topic_model_save_name_zip = topic_model_save_name_pkl + ".zip"
+    columns_found = [column for column in columns_to_check if column in topic_model.get_document_info(docs).columns]
+    doc_dets = topic_model.get_document_info(docs)[columns_found]
 
-            # Clear folder before replacing files
-            #delete_files_in_folder(topic_model_save_name_pkl)
+    # If you have created a 'sentence split' dataset from the cleaning options, map these sentences back to the original document.
+    try:
+        if split_sentence_drop == "Yes":
+            doc_dets = doc_dets.merge(prepared_docs[['document_index']], how = "left", left_index=True, right_index=True)
+            doc_dets = doc_dets.rename(columns={"document_index": "parent_document_index"}, errors='ignore')
 
-            topic_model.save(topic_model_save_name_pkl, serialization='pickle', save_embedding_model=False, save_ctfidf=False)
+            # 1. Group by Parent Document Index:
+            grouped = doc_dets.groupby('parent_document_index')
 
-            # Zip file example
-            
-            #zip_folder(topic_model_save_name_pkl, topic_model_save_name_zip)
-            output_list.append(topic_model_save_name_pkl)
+            # 2. Aggregate Topics and Probabilities:
+            def aggregate_topics(group):
+                original_text = ' '.join(group['Document'])
+                topics = group['Topic'].tolist()
 
-        return output_list, output_text
+                if 'Name' in group.columns:
+                    topic_names = group['Name'].tolist()
+                else:
+                    topic_names = None
+
+                if 'Probability' in group.columns:
+                    probabilities = group['Probability'].tolist()
+                else:
+                    probabilities = None  # Or any other default value you prefer
+
+                return pd.Series({'Document':original_text, 'Topic numbers': topics, 'Topic names': topic_names, 'Probabilities': probabilities})
+
+            #result_df = grouped.apply(aggregate_topics).reset_index()
+            doc_det_agg = grouped.apply(lambda x: aggregate_topics(x)).reset_index()
+
+            # Join back original text
+            #doc_det_agg = doc_det_agg.merge(original_data[[in_colnames_list_first]], how = "left", left_index=True, right_index=True)
+
+            doc_det_agg_output_name = output_folder + "doc_details_agg_" + data_file_name_no_ext + "_" + today_rev + ".csv"
+            doc_det_agg.to_csv(doc_det_agg_output_name)
+            output_list.append(doc_det_agg_output_name)
+
+    except Exception as e:
+        print("Creating aggregate document details failed, error:", e)
+
+    # Save document details to file
+    doc_dets.to_csv(doc_det_output_name)
+    output_list.append(doc_det_output_name)
+
+
+    if "CustomName" in topic_dets.columns:
+        topics_text_out_str = str(topic_dets["CustomName"])
+    else:
+        topics_text_out_str = str(topic_dets["Name"])
+    output_text = "Topics: " + topics_text_out_str
+
+    # Save topic model to file
+    if save_topic_model == "Yes":
+        print("Saving BERTopic model in .pkl format.")
+
+        #folder_path = output_folder #"output_model/"
+
+        #if not os.path.exists(folder_path):
+            # Create the folder
+        #    os.makedirs(folder_path)
+
+        topic_model_save_name_pkl = output_folder + data_file_name_no_ext + "_topics_" + today_rev + ".pkl"# + ".safetensors"
+        topic_model_save_name_zip = topic_model_save_name_pkl + ".zip"
+
+        # Clear folder before replacing files
+        #delete_files_in_folder(topic_model_save_name_pkl)
+
+        topic_model.save(topic_model_save_name_pkl, serialization='pickle', save_embedding_model=False, save_ctfidf=False)
+
+        # Zip file example
+        
+        #zip_folder(topic_model_save_name_pkl, topic_model_save_name_zip)
+        output_list.append(topic_model_save_name_pkl)
+
+    return output_list, output_text

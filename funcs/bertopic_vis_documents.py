@@ -22,7 +22,8 @@ from tqdm import tqdm
 import itertools
 import numpy as np
 
-# Shamelessly taken and adapted from Bertopic original implementation here (Maarten Grootendorst): https://github.com/MaartenGr/BERTopic/blob/master/bertopic/plotting/_documents.py
+
+# Following adapted from Bertopic original implementation here (Maarten Grootendorst): https://github.com/MaartenGr/BERTopic/blob/master/bertopic/plotting/_documents.py
 
 def visualize_documents_custom(topic_model,
                         docs: List[str],
@@ -168,16 +169,23 @@ def visualize_documents_custom(topic_model,
     df["y"] = embeddings_2d[:, 1]
 
     # Prepare text and names
+    trace_name_char_length = 60
     if isinstance(custom_labels, str):
         names = [[[str(topic), None]] + topic_model.topic_aspects_[custom_labels][topic] for topic in unique_topics]
         names = ["_".join([label[0] for label in labels[:4]]) for labels in names]
         names = [label if len(label) < 30 else label[:27] + "..." for label in names]
     elif topic_model.custom_labels_ is not None and custom_labels:
-        print("Using custom labels: ", topic_model.custom_labels_)
-        names = [topic_model.custom_labels_[topic + topic_model._outliers] for topic in unique_topics]
+        #print("Using custom labels: ", topic_model.custom_labels_)
+        #names = [topic_model.custom_labels_[topic + topic_model._outliers] for topic in unique_topics]
+        # Limit label length to 100 chars
+        names = [label[:trace_name_char_length] for label in (topic_model.custom_labels_[topic + topic_model._outliers] for topic in unique_topics)]
+
     else:
-        print("Not using custom labels")
-        names = [f"{topic} " + ", ".join([word for word, value in topic_model.get_topic(topic)][:3]) for topic in unique_topics]
+        #print("Not using custom labels")
+        # Limit label length to 100 chars
+        names = [f"{topic} " + ", ".join([word for word, value in topic_model.get_topic(topic)][:3])[:trace_name_char_length] for topic in unique_topics]
+
+        #names = [f"{topic} " + ", ".join([word for word, value in topic_model.get_topic(topic)][:3]) for topic in unique_topics]
 
     #print(names)
 

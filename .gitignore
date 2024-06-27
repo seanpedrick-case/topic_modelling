@@ -1,5 +1,6 @@
 *.pyc
 *.ipynb
+*.zip
 *.npz
 *.csv
 *.xlsx
@@ -12,6 +13,7 @@
 *.html
 *.log
 *.spec
+*.bin
 .ipynb_checkpoints/*
 old_code/*
 model/*
