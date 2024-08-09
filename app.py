@@ -1,14 +1,12 @@
-# Dendrograms will not work with the latest version of scipy (1.12.0), so run the following here/in your environment if you come across issues
-# import os
-# os.system("pip install scipy==1.11.4")
-
+import os
 import gradio as gr
 import pandas as pd
 import numpy as np
 
 from funcs.topic_core_funcs import pre_clean, optimise_zero_shot, extract_topics, reduce_outliers, represent_topics, visualise_topics, save_as_pytorch_model, change_default_vis_col
-from funcs.helper_functions import initial_file_load, custom_regex_load, ensure_output_folder_exists, output_folder, get_connection_params
+from funcs.helper_functions import initial_file_load, custom_regex_load, ensure_output_folder_exists, output_folder, get_connection_params, get_or_create_env_var
 from sklearn.feature_extraction.text import CountVectorizer
+from funcs.auth import authenticate_user, download_file_from_s3
 
 min_word_occurence_slider_default = 0.01
 max_word_occurence_slider_default = 0.95
@@ -34,6 +32,7 @@ with block:
     vectoriser_state = gr.State(CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=min_word_occurence_slider_default, max_df=max_word_occurence_slider_default))
 
     session_hash_state = gr.State("")
+    s3_output_folder_state = gr.State("")
  
     gr.Markdown(
     """
@@ -55,10 +54,14 @@ with block:
 
         with gr.Accordion("Clean data", open = False):
             with gr.Row():
-                clean_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove html, > 1 digit nums, emails, postcodes (UK).")
+                clean_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove html, URLs, non-ASCII, multiple digits, emails, postcodes (UK).")
                 drop_duplicate_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove duplicate text, drop < 50 character strings.")
                 anonymise_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Anonymise data on file load. Personal details are redacted - not 100% effective and slow!")
+                #with gr.Row():
                 split_sentence_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Split text into sentences. Useful for small datasets.")
+                #additional_custom_delimiters_drop = gr.Dropdown(choices=["and", ",", "as well as", "also"], multiselect=True, label="Additional custom delimiters to split sentences.")
+                min_sentence_length_num = gr.Number(value=5, label="Min char length of split sentences")
+            
             with gr.Row():
                 custom_regex = gr.UploadButton(label="Import custom regex removal file", file_count="multiple")    
                 gr.Markdown("""Import custom regex - csv table with one column of regex patterns with no header. Strings matching this pattern will be removed. Example pattern: (?i)roosevelt for case insensitive removal of this term.""")
@@ -76,8 +79,8 @@ with block:
             with gr.Accordion("Topic modelling settings - change documents per topic, max topics, frequency of terms", open = False):
                 
                 with gr.Row():
-                    min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 3, step = 1, label = "Minimum number of similar documents needed to make a topic.")
-                    max_topics_slider = gr.Slider(minimum = 2, maximum = 500, value = 100, step = 1, label = "Maximum number of topics")
+                    min_docs_slider = gr.Slider(minimum = 2, maximum = 1000, value = 5, step = 1, label = "Minimum number of similar documents needed to make a topic.")
+                    max_topics_slider = gr.Slider(minimum = 0, maximum = 500, value = 0, step = 1, label = "Maximum number of topics. If set to 0, then will choose topics to merge automatically.")
                 with gr.Row():
                     min_word_occurence_slider = gr.Slider(minimum = 0.001, maximum = 0.9, value = min_word_occurence_slider_default, step = 0.001, label = "Keep terms that appear in this minimum proportion of documents. Avoids creating topics with very uncommon words.")
                     max_word_occurence_slider = gr.Slider(minimum = 0.1, maximum = 1.0, value =max_word_occurence_slider_default, step = 0.01, label = "Keep terms that appear in less than this maximum proportion of documents. Avoids very common words in topic names.")
@@ -131,7 +134,7 @@ with block:
 
     # Clean data
     custom_regex.upload(fn=custom_regex_load, inputs=[custom_regex], outputs=[custom_regex_text, custom_regex_state])
-    clean_btn.click(fn=pre_clean, inputs=[data_state, in_colnames, data_file_name_no_ext_state, custom_regex_state, clean_text, drop_duplicate_text, anonymise_drop, split_sentence_drop], outputs=[output_single_text, output_file, data_state, data_file_name_no_ext_state, embeddings_state], api_name="clean")
+    clean_btn.click(fn=pre_clean, inputs=[data_state, in_colnames, data_file_name_no_ext_state, custom_regex_state, clean_text, drop_duplicate_text, anonymise_drop, split_sentence_drop, min_sentence_length_num, embeddings_state], outputs=[output_single_text, output_file, data_state, data_file_name_no_ext_state, embeddings_state], api_name="clean")
 
     # Optimise for keeping only zero-shot topics
     zero_shot_optimiser_btn.click(fn=optimise_zero_shot, outputs=[quality_mode_drop, min_docs_slider, max_topics_slider, min_word_occurence_slider, max_word_occurence_slider, zero_shot_similarity])
@@ -152,8 +155,14 @@ with block:
     plot_btn.click(fn=visualise_topics, inputs=[topic_model_state, data_state, data_file_name_no_ext_state, quality_mode_drop, embeddings_state, in_label, in_colnames, legend_label, sample_slide, visualisation_type_radio, seed_number], outputs=[vis_output_single_text, out_plot_file, plot, plot_2], api_name="plot")
 
     # Get session hash from connection parameters
-    block.load(get_connection_params, inputs=None, outputs=[session_hash_state])
+    block.load(get_connection_params, inputs=None, outputs=[session_hash_state, s3_output_folder_state])
 
-# Launch the Gradio app
+COGNITO_AUTH = get_or_create_env_var('COGNITO_AUTH', '0')
+print(f'The value of COGNITO_AUTH is {COGNITO_AUTH}')
+
+
 if __name__ == "__main__":
-    block.queue().launch(show_error=True)#, server_name="0.0.0.0", ssl_verify=False, server_port=7860)
+    if os.environ['COGNITO_AUTH'] == "1":
+        block.queue().launch(show_error=True, auth=authenticate_user)
+    else:
+        block.queue().launch(show_error=True, inbrowser=True)

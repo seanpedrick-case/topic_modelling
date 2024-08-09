@@ -8,26 +8,40 @@ custom_words = []
 my_stop_words = custom_words
 
 # #### Some of my cleaning functions
+url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+|(?:www\.)[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}'
 html_pattern_regex = r'<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});|\xa0|&nbsp;'
 html_start_pattern_end_dots_regex = r'<(.*?)\.\.'
+non_ascii_pattern = r'[^\x00-\x7F]+'
 email_pattern_regex = r'\S*@\S*\s?'
 num_pattern_regex = r'[0-9]+'
-nums_two_more_regex = r'\b[0-9]{2,}\b|\b[0-9]+\s[0-9]+\b'
+nums_two_more_regex = r'\b\d+[\.|\,]\d+\b|\b[0-9]{2,}\b|\b[0-9]+\s[0-9]+\b' # Should match two digit numbers or more, and also if there are full stops or commas in between
 postcode_pattern_regex = r'(\b(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]? ?[0-9][A-Z]{2})|((GIR ?0A{2})\b$)|(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]? ?[0-9]{1}?)$)|(\b(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]?)\b$)'
 multiple_spaces_regex = r'\s{2,}'
 
 def initial_clean(texts, custom_regex, progress=gr.Progress()):
+    # Convert to polars Series
     texts = pl.Series(texts).str.strip_chars()
-    text = texts.str.replace_all(html_pattern_regex, ' ')
-    text = text.str.replace_all(html_start_pattern_end_dots_regex, ' ')
-    text = text.str.replace_all(email_pattern_regex, ' ')
-    text = text.str.replace_all(nums_two_more_regex, ' ')
-    text = text.str.replace_all(postcode_pattern_regex, ' ')
-    text = text.str.replace_all(multiple_spaces_regex, ' ')
-
-    text = text.to_list()
     
-    return text
+    # Define a list of patterns and their replacements
+    patterns = [
+        (url_pattern, ' '),
+        (html_pattern_regex, ' '),
+        (html_start_pattern_end_dots_regex, ' '),
+        (non_ascii_pattern, ' '),
+        (email_pattern_regex, ' '),
+        (nums_two_more_regex, ' '),
+        (postcode_pattern_regex, ' '),
+        (multiple_spaces_regex, ' ')
+    ]
+    
+    # Apply each regex replacement
+    for pattern, replacement in patterns:
+        texts = texts.str.replace_all(pattern, replacement)
+    
+    # Convert the series back to a list
+    texts = texts.to_list()
+    
+    return texts
 
 def regex_clean(texts, custom_regex, progress=gr.Progress()):
     texts = pl.Series(texts).str.strip_chars()

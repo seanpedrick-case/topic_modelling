@@ -1,4 +1,3 @@
-import sys
 import os
 import zipfile
 import re
@@ -45,35 +44,66 @@ def ensure_output_folder_exists():
     else:
         print(f"The 'output/' folder already exists.")
 
-def get_connection_params(request: gr.Request):
-    '''
-    Get connection parameter values from request object.
-    '''
+async def get_connection_params(request: gr.Request):
+    base_folder = ""
+
     if request:
+        #print("request user:", request.username)
+
+        #request_data = await request.json()  # Parse JSON body
+        #print("All request data:", request_data)
+        #context_value = request_data.get('context') 
+        #if 'context' in request_data:
+        #     print("Request context dictionary:", request_data['context'])
 
         # print("Request headers dictionary:", request.headers)
         # print("All host elements", request.client)           
         # print("IP address:", request.client.host)
         # print("Query parameters:", dict(request.query_params))
+        # To get the underlying FastAPI items you would need to use await and some fancy @ stuff for a live query: https://fastapi.tiangolo.com/vi/reference/request/
+        #print("Request dictionary to object:", request.request.body())
         print("Session hash:", request.session_hash)
 
-        if 'x-cognito-id' in request.headers:
+        # Retrieving or setting CUSTOM_CLOUDFRONT_HEADER
+        CUSTOM_CLOUDFRONT_HEADER_var = get_or_create_env_var('CUSTOM_CLOUDFRONT_HEADER', '')
+        #print(f'The value of CUSTOM_CLOUDFRONT_HEADER is {CUSTOM_CLOUDFRONT_HEADER_var}')
+
+        # Retrieving or setting CUSTOM_CLOUDFRONT_HEADER_VALUE
+        CUSTOM_CLOUDFRONT_HEADER_VALUE_var = get_or_create_env_var('CUSTOM_CLOUDFRONT_HEADER_VALUE', '')
+        #print(f'The value of CUSTOM_CLOUDFRONT_HEADER_VALUE_var is {CUSTOM_CLOUDFRONT_HEADER_VALUE_var}')
+
+        if CUSTOM_CLOUDFRONT_HEADER_var and CUSTOM_CLOUDFRONT_HEADER_VALUE_var:
+            if CUSTOM_CLOUDFRONT_HEADER_var in request.headers:
+                supplied_cloudfront_custom_value = request.headers[CUSTOM_CLOUDFRONT_HEADER_var]
+                if supplied_cloudfront_custom_value == CUSTOM_CLOUDFRONT_HEADER_VALUE_var:
+                    print("Custom Cloudfront header found:", supplied_cloudfront_custom_value)
+                else:
+                    raise(ValueError, "Custom Cloudfront header value does not match expected value.")
+
+        # Get output save folder from 1 - username passed in from direct Cognito login, 2 - Cognito ID header passed through a Lambda authenticator, 3 - the session hash.
+
+        if request.username:
+            out_session_hash = request.username
+            base_folder = "user-files/"
+
+        elif 'x-cognito-id' in request.headers:
             out_session_hash = request.headers['x-cognito-id']
             base_folder = "user-files/"
-            #print("Cognito ID found:", out_session_hash)
+            print("Cognito ID found:", out_session_hash)
 
         else:
             out_session_hash = request.session_hash
             base_folder = "temp-files/"
-            #print("Cognito ID not found. Using session hash as save folder.")
+            # print("Cognito ID not found. Using session hash as save folder:", out_session_hash)
 
         output_folder = base_folder + out_session_hash + "/"
-        #print("S3 output folder is: " + "s3://" + bucket_name + "/" + output_folder)
+        #if bucket_name:
+        #    print("S3 output folder is: " + "s3://" + bucket_name + "/" + output_folder)
 
-        return out_session_hash
+        return out_session_hash, output_folder
     else:
         print("No session parameters found.")
-        return ""
+        return "",""
 
 def detect_file_type(filename):
     """Detect the file type based on its extension."""
@@ -286,6 +316,24 @@ def save_topic_outputs(topic_model: BERTopic, data_file_name_no_ext: str, output
     columns_found = [column for column in columns_to_check if column in topic_model.get_document_info(docs).columns]
     doc_dets = topic_model.get_document_info(docs)[columns_found]
 
+    ### If there are full topic probabilities, join these on to the document details df
+    def is_valid_dataframe(df):
+        """
+        Checks if the given object is a non-empty pandas DataFrame.
+
+        Args:
+            df: The object to check.
+
+        Returns:
+            True if df is a non-empty DataFrame, False otherwise.
+        """
+        if df is None:  # Check for None first
+            return False
+        return isinstance(df, pd.DataFrame) and not df.empty
+    
+    if is_valid_dataframe(topic_model.probabilities_):
+        doc_dets = doc_dets.merge(topic_model.probabilities_, left_index=True, right_index=True, how="left")
+
     # If you have created a 'sentence split' dataset from the cleaning options, map these sentences back to the original document.
     try:
         if split_sentence_drop == "Yes":
@@ -296,21 +344,42 @@ def save_topic_outputs(topic_model: BERTopic, data_file_name_no_ext: str, output
             grouped = doc_dets.groupby('parent_document_index')
 
             # 2. Aggregate Topics and Probabilities:
+            # def aggregate_topics(group):
+            #     original_text = ' '.join(group['Document'])
+            #     topics = group['Topic'].tolist()
+
+            #     if 'Name' in group.columns:
+            #         topic_names = group['Name'].tolist()
+            #     else:
+            #         topic_names = None
+
+            #     if 'Probability' in group.columns:
+            #         probabilities = group['Probability'].tolist()
+            #     else:
+            #         probabilities = None  # Or any other default value you prefer
+
+            #     return pd.Series({'Document':original_text, 'Topic numbers': topics, 'Topic names': topic_names, 'Probabilities': probabilities})
+
             def aggregate_topics(group):
                 original_text = ' '.join(group['Document'])
-                topics = group['Topic'].tolist()
+
+                # Filter out topics starting with '-1'
+                topics = [topic for topic in group['Topic'].tolist() if not str(topic).startswith('-1')]
 
                 if 'Name' in group.columns:
-                    topic_names = group['Name'].tolist()
+                    # Filter out topic names corresponding to excluded topics
+                    topic_names = [name for topic, name in zip(group['Topic'], group['Name'].tolist()) if not str(topic).startswith('-1')]
                 else:
                     topic_names = None
 
                 if 'Probability' in group.columns:
-                    probabilities = group['Probability'].tolist()
+                    # Filter out probabilities corresponding to excluded topics
+                    probabilities = [prob for topic, prob in zip(group['Topic'], group['Probability'].tolist()) if not str(topic).startswith('-1')]
                 else:
-                    probabilities = None  # Or any other default value you prefer
+                    probabilities = None 
 
-                return pd.Series({'Document':original_text, 'Topic numbers': topics, 'Topic names': topic_names, 'Probabilities': probabilities})
+                return pd.Series({'Document': original_text, 'Topic numbers': topics, 'Topic names': topic_names, 'Probabilities': probabilities})
+
 
             #result_df = grouped.apply(aggregate_topics).reset_index()
             doc_det_agg = grouped.apply(lambda x: aggregate_topics(x)).reset_index()

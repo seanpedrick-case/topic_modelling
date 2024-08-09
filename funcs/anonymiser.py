@@ -1,5 +1,6 @@
 from spacy.cli import download
 import spacy
+from spacy.pipeline import Sentencizer
 from funcs.presidio_analyzer_custom import analyze_dict
 spacy.prefer_gpu()
 
@@ -24,11 +25,6 @@ def spacy_model_installed(model_name):
 model_name = "en_core_web_sm"
 nlp = spacy_model_installed(model_name)
 
-#spacy.load(model_name)
-# Need to overwrite version of gradio present in Huggingface spaces as it doesn't have like buttons/avatars (Oct 2023)
-#os.system("pip uninstall -y gradio")
-#os.system("pip install gradio==3.50.0")
-#os.system("python -m spacy download en_core_web_lg")
 
 import re
 import secrets
@@ -43,15 +39,62 @@ from presidio_analyzer import AnalyzerEngine, BatchAnalyzerEngine, PatternRecogn
 from presidio_anonymizer import AnonymizerEngine, BatchAnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
+from typing import List
+
 # Function to Split Text and Create DataFrame using SpaCy
-def expand_sentences_spacy(df, colname, nlp=nlp):
+def expand_sentences_spacy(df, colname, custom_delimiters:List[str]=[], nlp=nlp):
     expanded_data = []
+
+    # if not custom_delimiters:
+    #     custom_delimiters = []
+
     df = df.drop('index', axis = 1, errors="ignore").reset_index(names='index')
+
+    # sentencizer = Sentencizer()
+
+    # new_punct_chars = sentencizer.default_punct_chars
+    # new_punct_chars.extend(custom_delimiters)
+
+    # config = {"punct_chars": new_punct_chars}
+    # nlp.add_pipe("sentencizer", config=config)
+
     for index, row in df.iterrows():
         doc = nlp(row[colname])
         for sent in doc.sents:
             expanded_data.append({'document_index': row['index'], colname: sent.text})
     return pd.DataFrame(expanded_data)
+
+# def expand_sentences_spacy(df, colname, custom_delimiters:List[str]=[], nlp=nlp):
+
+#     #print("Custom delimiters:", custom_delimiters)
+
+#     expanded_data = []
+#     df = df.drop('index', axis = 1, errors="ignore").reset_index(names='index')
+
+#     sentencizer = Sentencizer()
+
+#     new_punct_chars = sentencizer.default_punct_chars
+#     if custom_delimiters:
+#         new_punct_chars.extend(custom_delimiters)
+
+#     pattern = "(" + "|".join(re.escape(punct) for punct in new_punct_chars) + ")"
+#     #print("Patterns:", pattern)
+#     split_list = []
+
+#     for idx, string in enumerate(df[colname]):
+#         new_split = re.split(pattern, string)
+#         for n, sentence in enumerate(new_split):
+#             if sentence:
+#                 # If there is a split delimiter in the 'sentence' after, add it to the previous sentence as it will be removed at a later step
+#                 if n + 1 < len(new_split):
+#                     if new_split[n + 1]:
+#                         # If the next split is in the list of split characters, then add it to this current sentence
+#                         if new_split[n + 1] in new_punct_chars:
+#                             split_list.append({'document_index': idx, colname: sentence + new_split[n + 1]})
+#                 else:
+#                     split_list.append({'document_index': idx, colname: sentence})
+    
+#     return pd.DataFrame(split_list)
 
 def anon_consistent_names(df):
     # ## Pick out common names and replace them with the same person value

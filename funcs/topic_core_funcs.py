@@ -52,7 +52,7 @@ def change_default_vis_col(in_colnames:List[str]):
     else:
         return gr.Dropdown()
 
-def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str, custom_regex: pd.DataFrame, clean_text: str, drop_duplicate_text: str, anonymise_drop: str, sentence_split_drop: str, embeddings_state: dict, progress: gr.Progress = gr.Progress(track_tqdm=True)) -> tuple:
+def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str, custom_regex: pd.DataFrame, clean_text: str, drop_duplicate_text: str, anonymise_drop: str, sentence_split_drop: str, min_sentence_length: int, embeddings_state: dict, progress: gr.Progress = gr.Progress(track_tqdm=True)) -> tuple:
     """
     Pre-processes the input data by cleaning text, removing duplicates, anonymizing data, and splitting sentences based on the provided options.
 
@@ -65,6 +65,7 @@ def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str,
         drop_duplicate_text (str): Option to drop duplicate text ("Yes" or "No").
         anonymise_drop (str): Option to anonymize data ("Yes" or "No").
         sentence_split_drop (str): Option to split text into sentences ("Yes" or "No").
+        min_sentence_length (int): Minimum length of sentences after split (integer value of character length)
         embeddings_state (dict): State of the embeddings.
         progress (gr.Progress, optional): Progress tracker for the cleaning process.
 
@@ -140,6 +141,8 @@ def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str,
         anon_toc = time.perf_counter()
         time_out = f"Anonymising text took {anon_toc - anon_tic:0.1f} seconds"
 
+        print(time_out)
+
     if sentence_split_drop == "Yes":
         progress(0.6, desc= "Splitting text into sentences")
 
@@ -149,11 +152,14 @@ def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str,
         anon_tic = time.perf_counter()
         
         data = expand_sentences_spacy(data, in_colnames_list_first)
-        data = data[data[in_colnames_list_first].str.len() >= 25] # Keep only rows with at least 25 characters
+        data = data[data[in_colnames_list_first].str.len() > min_sentence_length] # Keep only rows with at more than 5 characters
+        data[in_colnames_list_first] = data[in_colnames_list_first].str.strip()
         data.reset_index(inplace=True, drop=True)
 
         anon_toc = time.perf_counter()
-        time_out = f"Anonymising text took {anon_toc - anon_tic:0.1f} seconds"
+        time_out = f"Splitting text took {anon_toc - anon_tic:0.1f} seconds"
+
+        print(time_out)
 
     out_data_name = output_folder + data_file_name_no_ext + "_" + today_rev +  ".csv"
     data.to_csv(out_data_name)
@@ -252,6 +258,9 @@ def extract_topics(
     elif calc_probs == "Yes":
         print("Calculating all probabilities.")
         calc_probs = True
+        
+    if max_topics_slider == 0:
+        max_topics_slider = 'auto'
 
     if not in_colnames:
         error_message = "Please enter one column name to use for cleaning and finding topics."
@@ -279,7 +288,7 @@ def extract_topics(
         # Attempt to load the model from each local location
         for location in local_embeddings_locations:
             try:
-                embedding_model = SentenceTransformer(location, truncate_dim=512)
+                embedding_model = SentenceTransformer(location)#, truncate_dim=512)
                 print(f"Found local model installation at: {location}")
                 break  # Exit the loop if the model is found
             except Exception as e:
@@ -287,7 +296,7 @@ def extract_topics(
                 continue
         else:
             # If the loop completes without finding the model in any local location
-            embedding_model = SentenceTransformer(embeddings_name, truncate_dim=512)
+            embedding_model = SentenceTransformer(embeddings_name)#, truncate_dim=512)
             print("Could not find local model installation. Downloading from Huggingface")
 
         #embedding_model = SentenceTransformer(embeddings_name, truncate_dim=512)       
@@ -343,6 +352,7 @@ def extract_topics(
             assigned_topics, probs = topic_model.fit_transform(docs, embeddings_out)
 
             if calc_probs == True:
+                
                 topics_probs_out = pd.DataFrame(topic_model.probabilities_)
                 topics_probs_out_name = output_folder + "topic_full_probs_" + data_file_name_no_ext + "_" + today_rev + ".csv"
                 topics_probs_out.to_csv(topics_probs_out_name)
@@ -385,6 +395,10 @@ def extract_topics(
             assigned_topics, probs = topic_model.fit_transform(docs, embeddings_out)
 
             if calc_probs == True:
+
+                assigned_topics, probs = topic_model.transform(docs, embeddings_out)
+                print("Probs:", probs)
+                topic_model.probabilities_ = probs
                 topics_probs_out = pd.DataFrame(topic_model.probabilities_)
                 topics_probs_out_name = output_folder + "topic_full_probs_" + data_file_name_no_ext + "_" + today_rev + ".csv"
                 topics_probs_out.to_csv(topics_probs_out_name)
@@ -424,7 +438,7 @@ def extract_topics(
 
     # Tidy up topic label format a bit to have commas and spaces by default
     if not candidate_topics:
-        print("Zero shot topics found, so not renaming")
+        print("Zero shot topics not found, so not renaming")
         new_topic_labels = topic_model.generate_topic_labels(nr_words=3, separator=", ")
         topic_model.set_topic_labels(new_topic_labels)
     if candidate_topics:
@@ -447,7 +461,7 @@ def extract_topics(
      # If you want to save your embedding files
     if return_intermediate_files == "Yes":
         print("Saving embeddings to file")
-        if high_quality_mode == "Yes":
+        if high_quality_mode == "No":
             embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'tfidf_embeddings.npz'
         else:
             if embeddings_super_compress == "No":
