@@ -1,13 +1,14 @@
 # First stage: build dependencies
 FROM public.ecr.aws/docker/library/python:3.11.9-slim-bookworm
 
-# Install Lambda web adapter in case you want to run with with an AWS Lamba function URL
-COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.3 /lambda-adapter /opt/extensions/lambda-adapter
+# Install Lambda web adapter in case you want to run with with an AWS Lamba function URL (not essential if not using Lambda)
+#COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.3 /lambda-adapter /opt/extensions/lambda-adapter
 
-# Install wget and curl
+# Install wget, curl, and build-essential
 RUN apt-get update && apt-get install -y \
 	wget \
-	curl
+	curl \
+	build-essential
 
 # Create a directory for the model
 RUN mkdir /model
@@ -19,7 +20,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Gradio needs to be installed after due to conflict with spacy in requirements
-RUN pip install --no-cache-dir gradio==4.36.1
+RUN pip install --no-cache-dir gradio==4.41.0
 
 # Download the quantised phi model directly with curl
 RUN curl -L -o Phi-3-mini-128k-instruct.Q4_K_M.gguf https://huggingface.co/QuantFactory/Phi-3-mini-128k-instruct-GGUF/tree/main/Phi-3-mini-128k-instruct.Q4_K_M.gguf
@@ -53,6 +54,7 @@ ENV HOME=/home/user \
 	PATH=/home/user/.local/bin:$PATH \
     PYTHONPATH=$HOME/app \
 	PYTHONUNBUFFERED=1 \
+	PYTHONDONTWRITEBYTECODE=1 \
 	GRADIO_ALLOW_FLAGGING=never \
 	GRADIO_NUM_PORTS=1 \
 	GRADIO_SERVER_NAME=0.0.0.0 \
@@ -68,7 +70,5 @@ WORKDIR $HOME/app
 
 # Copy the current directory contents into the container at $HOME/app setting the owner to the user
 COPY --chown=user . $HOME/app
-#COPY . $HOME/app
-
 
 CMD ["python", "app.py"]
