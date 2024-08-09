@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
 	build-essential
 
 # Create a directory for the model
-RUN mkdir /model
+RUN mkdir /model && mkdir /model/rep && mkdir /model/embed
 
 WORKDIR /src
 
@@ -21,19 +21,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Gradio needs to be installed after due to conflict with spacy in requirements
 RUN pip install --no-cache-dir gradio==4.41.0
-
-# Download the quantised phi model directly with curl
-RUN curl -L -o Phi-3-mini-128k-instruct.Q4_K_M.gguf https://huggingface.co/QuantFactory/Phi-3-mini-128k-instruct-GGUF/tree/main/Phi-3-mini-128k-instruct.Q4_K_M.gguf
-
-# If needed, move the file to your desired directory in the Docker image
-RUN mv Phi-3-mini-128k-instruct.Q4_K_M.gguf /model/rep/
-
-# Download the Mixed bread embedding model during the build process
-RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
-RUN apt-get install git-lfs -y
-RUN git lfs install
-RUN git clone https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1 /model/embed
-RUN rm -rf /model/embed/.git
 
 # Set up a new user named "user" with user ID 1000
 RUN useradd -m -u 1000 user
@@ -45,6 +32,18 @@ RUN chown -R user:user /home/user
 RUN mkdir -p /home/user/app/output && chown -R user:user /home/user/app/output
 RUN mkdir -p /home/user/.cache/huggingface/hub && chown -R user:user /home/user/.cache/huggingface/hub
 RUN mkdir -p /home/user/.cache/matplotlib && chown -R user:user /home/user/.cache/matplotlib
+RUN mkdir -p /home/user/app/model/rep && chown -R user:user /home/user/app/model/rep 
+RUN mkdir -p /home/user/app/model/embed && chown -R user:user /home/user/app/model/embed
+
+# Download the quantised phi model directly with curl
+RUN curl -L -o /home/user/app/model/rep/Phi-3-mini-128k-instruct.Q4_K_M.gguf https://huggingface.co/QuantFactory/Phi-3-mini-128k-instruct-GGUF/tree/main/Phi-3-mini-128k-instruct.Q4_K_M.gguf
+
+# Download the Mixed bread embedding model during the build process
+RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
+RUN apt-get install git-lfs -y
+RUN git lfs install
+RUN git clone https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1 /home/user/app/model/embed
+RUN rm -rf /home/user/app/model/embed/.git
 
 # Switch to the "user" user
 USER user
