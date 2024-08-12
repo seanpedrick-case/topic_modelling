@@ -35,15 +35,19 @@ RUN mkdir -p /home/user/.cache/matplotlib && chown -R user:user /home/user/.cach
 RUN mkdir -p /home/user/app/model/rep && chown -R user:user /home/user/app/model/rep 
 RUN mkdir -p /home/user/app/model/embed && chown -R user:user /home/user/app/model/embed
 
-# Download the quantised phi model directly with curl
-RUN curl -L -o /home/user/app/model/rep/Phi-3-mini-128k-instruct.Q4_K_M.gguf https://huggingface.co/QuantFactory/Phi-3-mini-128k-instruct-GGUF/tree/main/Phi-3-mini-128k-instruct.Q4_K_M.gguf
+# Download the quantised phi model directly with curl. Changed at it is so big - not loaded
+#RUN curl -L -o /home/user/app/model/rep/Phi-3.1-mini-128k-instruct-Q4_K_M.gguf https://huggingface.co/bartowski/Phi-3.1-mini-128k-instruct-GGUF/tree/main/Phi-3.1-mini-128k-instruct-Q4_K_M.gguf
 
-# Download the Mixed bread embedding model during the build process
-RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
-RUN apt-get install git-lfs -y
-RUN git lfs install
-RUN git clone https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1 /home/user/app/model/embed
-RUN rm -rf /home/user/app/model/embed/.git
+# Download the Mixed bread embedding model during the build process - changed as it is too big for AWS. Not loaded.
+#RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
+#RUN apt-get install git-lfs -y
+#RUN git lfs install
+#RUN git clone https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1 /home/user/app/model/embed
+#RUN rm -rf /home/user/app/model/embed/.git
+
+# Download the BGE embedding model during the build process. Create a directory for the model and download specific files using huggingface_hub
+COPY download_model.py /src/download_model.py
+RUN python /src/download_model.py
 
 # Switch to the "user" user
 USER user

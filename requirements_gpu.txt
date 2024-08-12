@@ -12,7 +12,8 @@ presidio_analyzer==2.2.354
 presidio_anonymizer==2.2.354
 scipy==1.11.4
 polars==0.20.6
+llama-cpp-python==0.2.87 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
 torch --index-url https://download.pytorch.org/whl/cu121
-llama-cpp-python==0.2.77 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
-numpy==1.26.4
 sentence-transformers==3.0.1
+numpy==1.26.4
+

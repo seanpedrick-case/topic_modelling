@@ -4,15 +4,20 @@ from llama_cpp import Llama
 from pydantic import BaseModel
 import torch.cuda
 from huggingface_hub import hf_hub_download
+from gradio import Warning
 
 from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, BaseRepresentation
 from funcs.embeddings import torch_device
 from funcs.prompts import phi3_prompt, phi3_start
+from funcs.helper_functions import get_or_create_env_var
 
 chosen_prompt = phi3_prompt #open_hermes_prompt # stablelm_prompt 
 chosen_start_tag =  phi3_start #open_hermes_start # stablelm_start
 
 random_seed = 42
+
+RUNNING_ON_AWS = get_or_create_env_var('RUNNING_ON_AWS', '0')
+print(f'The value of RUNNING_ON_AWS is {RUNNING_ON_AWS}')
 
 # Currently set n_gpu_layers to 0 even with cuda due to persistent bugs in implementation with cuda
 print("torch device for representation functions:", torch_device)
@@ -140,6 +145,14 @@ def create_representation_model(representation_type: str, llm_config: dict, hf_m
     """
 
     if representation_type == "LLM":
+        print("RUNNING_ON_AWS:", RUNNING_ON_AWS)
+        if RUNNING_ON_AWS=="1":
+            error_message = "LLM representation not available on AWS due to model size restrictions. Returning base representation"
+            Warning(error_message, duration=5)
+            print(error_message)
+            representation_model = {"LLM":base_rep}
+            return representation_model
+
         print("Generating LLM representation")
         # Use llama.cpp to load in model
 

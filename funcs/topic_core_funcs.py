@@ -13,10 +13,10 @@ PandasDataFrame = Type[pd.DataFrame]
 
 from funcs.clean_funcs import initial_clean, regex_clean
 from funcs.anonymiser import expand_sentences_spacy
-from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs, output_folder
+from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs, output_folder, get_or_create_env_var
 from funcs.embeddings import make_or_load_embeddings, torch_device
 from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, hierarchical_topics_custom, visualize_hierarchy_custom
-from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag, random_seed
+from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag, random_seed, RUNNING_ON_AWS
 
 from sklearn.feature_extraction.text import CountVectorizer
 
@@ -36,11 +36,14 @@ today = datetime.now().strftime("%d%m%Y")
 today_rev = datetime.now().strftime("%Y%m%d")
 
 # Load embeddings
-embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"BAAI/large-small-en-v1.5" #"jinaai/jina-embeddings-v2-base-en"
+if RUNNING_ON_AWS=="0":
+    embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"BAAI/large-small-en-v1.5" #"jinaai/jina-embeddings-v2-base-en"
+else:
+    embeddings_name = "sentence-transformers/all-MiniLM-L6-v2"
 
 # LLM model used for representing topics
-hf_model_name =  "QuantFactory/Phi-3-mini-128k-instruct-GGUF"#'second-state/stablelm-2-zephyr-1.6b-GGUF' #'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF'
-hf_model_file =   "Phi-3-mini-128k-instruct.Q4_K_M.gguf"#'stablelm-2-zephyr-1_6b-Q5_K_M.gguf' # 'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf'
+hf_model_name =  "bartowski/Phi-3.1-mini-128k-instruct-GGUF"#'second-state/stablelm-2-zephyr-1.6b-GGUF' #'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF'
+hf_model_file =   "Phi-3.1-mini-128k-instruct-Q4_K_M.gguf"#'stablelm-2-zephyr-1_6b-Q5_K_M.gguf' # 'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf'
 
 # When topic modelling column is chosen, change the default visualisation column to the same
 def change_default_vis_col(in_colnames:List[str]):
