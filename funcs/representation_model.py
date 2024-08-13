@@ -1,6 +1,6 @@
 import os
 from bertopic.representation import LlamaCPP
-from llama_cpp import Llama
+
 from pydantic import BaseModel
 import torch.cuda
 from huggingface_hub import hf_hub_download
@@ -152,6 +152,9 @@ def create_representation_model(representation_type: str, llm_config: dict, hf_m
             print(error_message)
             representation_model = {"LLM":base_rep}
             return representation_model
+        # Else import Llama
+        else:
+            from llama_cpp import Llama
 
         print("Generating LLM representation")
         # Use llama.cpp to load in model

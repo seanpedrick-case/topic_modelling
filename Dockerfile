@@ -15,9 +15,9 @@ RUN mkdir /model && mkdir /model/rep && mkdir /model/embed
 
 WORKDIR /src
 
-COPY requirements.txt .
+COPY requirements_aws.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements_aws.txt
 
 # Gradio needs to be installed after due to conflict with spacy in requirements
 RUN pip install --no-cache-dir gradio==4.41.0
@@ -46,7 +46,7 @@ RUN mkdir -p /home/user/app/cache && chown -R user:user /home/user/app/cache
 #RUN git clone https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1 /home/user/app/model/embed
 #RUN rm -rf /home/user/app/model/embed/.git
 
-# Download the BGE embedding model during the build process. Create a directory for the model and download specific files using huggingface_hub
+# Download the embedding model - Create a directory for the model and download specific files using huggingface_hub
 COPY download_model.py /src/download_model.py
 RUN python /src/download_model.py
 
@@ -56,7 +56,7 @@ USER user
 # Set home to the user's home directory
 ENV HOME=/home/user \
 	PATH=/home/user/.local/bin:$PATH \
-    PYTHONPATH=$HOME/app \
+    PYTHONPATH=/home/user/app \
 	PYTHONUNBUFFERED=1 \
 	PYTHONDONTWRITEBYTECODE=1 \
 	GRADIO_ALLOW_FLAGGING=never \
@@ -66,7 +66,6 @@ ENV HOME=/home/user \
 	GRADIO_THEME=huggingface \
 	AWS_STS_REGIONAL_ENDPOINT=regional \
 	GRADIO_OUTPUT_FOLDER='output/' \
-	#GRADIO_ROOT_PATH=/data-text-search \
 	NUMBA_CACHE_DIR=/home/user/app/cache \
 	SYSTEM=spaces
  
