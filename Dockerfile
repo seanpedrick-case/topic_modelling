@@ -34,6 +34,7 @@ RUN mkdir -p /home/user/.cache/huggingface/hub && chown -R user:user /home/user/
 RUN mkdir -p /home/user/.cache/matplotlib && chown -R user:user /home/user/.cache/matplotlib
 RUN mkdir -p /home/user/app/model/rep && chown -R user:user /home/user/app/model/rep 
 RUN mkdir -p /home/user/app/model/embed && chown -R user:user /home/user/app/model/embed
+RUN mkdir -p /home/user/app/cache && chown -R user:user /home/user/app/cache
 
 # Download the quantised phi model directly with curl. Changed at it is so big - not loaded
 #RUN curl -L -o /home/user/app/model/rep/Phi-3.1-mini-128k-instruct-Q4_K_M.gguf https://huggingface.co/bartowski/Phi-3.1-mini-128k-instruct-GGUF/tree/main/Phi-3.1-mini-128k-instruct-Q4_K_M.gguf
@@ -66,6 +67,7 @@ ENV HOME=/home/user \
 	AWS_STS_REGIONAL_ENDPOINT=regional \
 	GRADIO_OUTPUT_FOLDER='output/' \
 	#GRADIO_ROOT_PATH=/data-text-search \
+	NUMBA_CACHE_DIR=/home/user/app/cache \
 	SYSTEM=spaces
  
 # Set the working directory to the user's home directory
