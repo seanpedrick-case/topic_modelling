@@ -4,8 +4,7 @@ from huggingface_hub import hf_hub_download
 repo_id = "sentence-transformers/all-MiniLM-L6-v2" #"BAAI/bge-small-en-v1.5"
 files_to_download = [
     "config.json",
-    "config_sentence_transformers.json",
-    "model.safetensors",
+    "pytorch_model.bin",
     "tokenizer_config.json",
     "vocab.txt"
 ]
