@@ -5,30 +5,34 @@ FROM python:3.11.9-slim-bookworm AS builder
 #COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.3 /lambda-adapter /opt/extensions/lambda-adapter
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && rm -rf /var/lib/apt/lists/*
 
 # Create directories (if needed for model download script)
-RUN mkdir -p /model/rep /model/embed
+RUN mkdir -p /model/rep /model/embed /install
 
 WORKDIR /src
 
 # Copy requirements file and install dependencies
 COPY requirements_aws.txt .
-RUN pip install --no-cache-dir -r requirements_aws.txt
+RUN pip install --no-cache-dir --target=/install -r requirements_aws.txt
 
 # Install Gradio
-RUN pip install --no-cache-dir gradio==4.41.0
+#RUN pip install --no-cache-dir --target=/install gradio==4.41.0
 
 # Download models (using your download_model.py script)
 COPY download_model.py /src/download_model.py
 RUN python /src/download_model.py
+
+RUN rm requirements_aws.txt download_model.py
 
 # Stage 2: Final runtime image
 FROM python:3.11.9-slim-bookworm
 
 # Create a non-root user
 RUN useradd -m -u 1000 user
+
+# Copy installed packages from builder stage
+COPY --from=builder /install /usr/local/lib/python3.11/site-packages/
 
 # Create necessary directories and set ownership
 RUN mkdir -p /home/user/app/output /home/user/.cache/huggingface/hub /home/user/.cache/matplotlib /home/user/app/cache \

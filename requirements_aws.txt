@@ -1,8 +1,8 @@
 boto3==1.34.158
 bertopic==0.16.2
-spacy
+spacy==3.7.5
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1.tar.gz
-gradio # Not specified version due to interaction with spacy - reinstall latest version after requirements.txt load
+gradio # Not specified version due to possible conflict with spacy
 pyarrow==14.0.2
 openpyxl==3.1.2
 Faker==22.2.0
