@@ -8,7 +8,7 @@ FROM public.ecr.aws/docker/library/python:3.11.9-slim-bookworm
 RUN apt-get update && apt-get install -y \
 	wget \
 	curl \
-	build-essential
+	&& rm -rf /var/lib/apt/lists/*
 
 # Create a directory for the model
 RUN mkdir /model && mkdir /model/rep && mkdir /model/embed
