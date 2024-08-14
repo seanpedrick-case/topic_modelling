@@ -1,14 +1,16 @@
 # First stage: build dependencies
-FROM public.ecr.aws/docker/library/python:3.11.9-slim-bookworm
+#FROM public.ecr.aws/docker/library/python:3.11.9-slim-bookworm
+FROM python:3.11.9-slim-bookworm
 
 # Install Lambda web adapter in case you want to run with with an AWS Lamba function URL (not essential if not using Lambda)
 #COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.3 /lambda-adapter /opt/extensions/lambda-adapter
 
 # Install wget, curl, and build-essential
 RUN apt-get update && apt-get install -y \
-	wget \
-	curl \
 	&& rm -rf /var/lib/apt/lists/*
+
+#wget \
+#curl \
 
 # Create a directory for the model
 RUN mkdir /model && mkdir /model/rep && mkdir /model/embed
@@ -29,12 +31,12 @@ RUN useradd -m -u 1000 user
 RUN chown -R user:user /home/user
 
 # Make output folder
-RUN mkdir -p /home/user/app/output && chown -R user:user /home/user/app/output
-RUN mkdir -p /home/user/.cache/huggingface/hub && chown -R user:user /home/user/.cache/huggingface/hub
-RUN mkdir -p /home/user/.cache/matplotlib && chown -R user:user /home/user/.cache/matplotlib
-RUN mkdir -p /home/user/app/model/rep && chown -R user:user /home/user/app/model/rep 
-RUN mkdir -p /home/user/app/model/embed && chown -R user:user /home/user/app/model/embed
-RUN mkdir -p /home/user/app/cache && chown -R user:user /home/user/app/cache
+RUN mkdir -p /home/user/app/output && chown -R user:user /home/user/app/output \
+&& mkdir -p /home/user/.cache/huggingface/hub && chown -R user:user /home/user/.cache/huggingface/hub \
+&& mkdir -p /home/user/.cache/matplotlib && chown -R user:user /home/user/.cache/matplotlib \
+&& mkdir -p /home/user/app/model/rep && chown -R user:user /home/user/app/model/rep \
+&& mkdir -p /home/user/app/model/embed && chown -R user:user /home/user/app/model/embed \
+&& mkdir -p /home/user/app/cache && chown -R user:user /home/user/app/cache
 
 # Download the quantised phi model directly with curl. Changed at it is so big - not loaded
 #RUN curl -L -o /home/user/app/model/rep/Phi-3.1-mini-128k-instruct-Q4_K_M.gguf https://huggingface.co/bartowski/Phi-3.1-mini-128k-instruct-GGUF/tree/main/Phi-3.1-mini-128k-instruct-Q4_K_M.gguf
