@@ -1,5 +1,5 @@
 # Stage 1: Build dependencies and download models
-FROM python:3.11.9-slim-bookworm AS builder
+FROM public.ecr.aws/docker/library/python:3.11.9-slim-bookworm AS builder
 
 # Install Lambda web adapter in case you want to run with with an AWS Lamba function URL (not essential if not using Lambda)
 #COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.3 /lambda-adapter /opt/extensions/lambda-adapter
@@ -16,8 +16,11 @@ WORKDIR /src
 COPY requirements_aws.txt .
 RUN pip install --no-cache-dir --target=/install -r requirements_aws.txt
 
-# Install Gradio
-#RUN pip install --no-cache-dir --target=/install gradio==4.41.0
+# Install sentence-transformers without dependencies
+RUN pip install --no-cache-dir sentence-transformers==3.0.1 --no-deps
+
+# Add /install to the PYTHONPATH
+ENV PYTHONPATH="/install:${PYTHONPATH}"
 
 # Download models (using your download_model.py script)
 COPY download_model.py /src/download_model.py
@@ -26,7 +29,7 @@ RUN python /src/download_model.py
 RUN rm requirements_aws.txt download_model.py
 
 # Stage 2: Final runtime image
-FROM python:3.11.9-slim-bookworm
+FROM public.ecr.aws/docker/library/python:3.11.9-slim-bookworm
 
 # Create a non-root user
 RUN useradd -m -u 1000 user
