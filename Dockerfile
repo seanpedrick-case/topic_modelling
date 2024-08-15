@@ -12,12 +12,13 @@ RUN mkdir -p /model/rep /model/embed /install
 
 WORKDIR /src
 
-# Copy requirements file and install dependencies
+# Copy requirements file and install dependencies. Sentence transformers and Bertopic are installed without dependencies so that torch is not reinstalled.
 COPY requirements_aws.txt .
-RUN pip install --no-cache-dir --target=/install -r requirements_aws.txt
 
-# Install sentence-transformers without dependencies
-RUN pip install --no-cache-dir sentence-transformers==3.0.1 --no-deps
+RUN pip install torch==2.4.0+cpu --index-url https://download.pytorch.org/whl/cpu \
+&& pip install --no-cache-dir sentence-transformers==3.0.1 --no-deps \
+&& pip install --no-cache-dir bertopic==0.16.2 --no-deps \
+&& pip install --no-cache-dir --target=/install -r requirements_aws.txt
 
 # Add /install to the PYTHONPATH
 ENV PYTHONPATH="/install:${PYTHONPATH}"
