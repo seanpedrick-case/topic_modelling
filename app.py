@@ -5,6 +5,7 @@ import numpy as np
 
 from funcs.topic_core_funcs import pre_clean, optimise_zero_shot, extract_topics, reduce_outliers, represent_topics, visualise_topics, save_as_pytorch_model, change_default_vis_col
 from funcs.helper_functions import initial_file_load, custom_regex_load, ensure_output_folder_exists, output_folder, get_connection_params, get_or_create_env_var
+from funcs.embeddings import make_or_load_embeddings
 from sklearn.feature_extraction.text import CountVectorizer
 from funcs.auth import authenticate_user, download_file_from_s3
 

@@ -93,6 +93,10 @@ def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str,
 
     in_colnames_list_first = in_colnames[0]
 
+    # Reset original index to a new column so you can link it to data outputted from cleaning
+    if not "original_index" in data.columns:
+        data = data.reset_index(names="original_index")
+
     if clean_text == "Yes":
         clean_tic = time.perf_counter()
         print("Starting data clean.")
@@ -343,6 +347,7 @@ def extract_topics(
     if not candidate_topics:
         
         try:
+            # print("vectoriser_model:", vectoriser_model)
 
             topic_model = BERTopic( embedding_model=embedding_model,
                                     vectorizer_model=vectoriser_model,

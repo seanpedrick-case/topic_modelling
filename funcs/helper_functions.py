@@ -5,6 +5,7 @@ import pandas as pd
 import gradio as gr
 import gzip
 import pickle
+import csv
 import numpy as np
 from bertopic import BERTopic
 from datetime import datetime
@@ -129,7 +130,7 @@ def read_file(filename):
     print("Loading in file")
 
     if file_type == 'csv':
-        file = pd.read_csv(filename, low_memory=False)#.reset_index().drop(["index", "Unnamed: 0"], axis=1, errors="ignore")
+        file = pd.read_csv(filename)#.reset_index().drop(["index", "Unnamed: 0"], axis=1, errors="ignore")
     elif file_type == 'xlsx':
         file = pd.read_excel(filename)#.reset_index().drop(["index", "Unnamed: 0"], axis=1, errors="ignore")
     elif file_type == 'parquet':

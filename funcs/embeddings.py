@@ -1,5 +1,6 @@
 import time
 import numpy as np
+import os
 from torch import cuda, backends, version
 
 # Check for torch cuda
@@ -12,7 +13,7 @@ if cuda.is_available():
     torch_device = "gpu"
     print("Cuda version installed is: ", version.cuda)
     high_quality_mode = "Yes"
-    #os.system("nvidia-smi")
+    os.system("nvidia-smi")
 else: 
     torch_device =  "cpu"
     high_quality_mode = "No"

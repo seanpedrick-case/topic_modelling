@@ -42,61 +42,22 @@ from presidio_anonymizer.entities import OperatorConfig
 from typing import List
 
 # Function to Split Text and Create DataFrame using SpaCy
-def expand_sentences_spacy(df, colname, custom_delimiters:List[str]=[], nlp=nlp):
+def expand_sentences_spacy(df:pd.DataFrame, colname:str, custom_delimiters:List[str]=[], nlp=nlp):
+    '''
+    Expand passages into sentences using Spacy's built in NLP capabilities
+    '''
     expanded_data = []
 
-    # if not custom_delimiters:
-    #     custom_delimiters = []
-
     df = df.drop('index', axis = 1, errors="ignore").reset_index(names='index')
-
-    # sentencizer = Sentencizer()
-
-    # new_punct_chars = sentencizer.default_punct_chars
-    # new_punct_chars.extend(custom_delimiters)
-
-    # config = {"punct_chars": new_punct_chars}
-    # nlp.add_pipe("sentencizer", config=config)
 
     for index, row in df.iterrows():
         doc = nlp(row[colname])
         for sent in doc.sents:
-            expanded_data.append({'document_index': row['index'], colname: sent.text})
+            expanded_data.append({'original_index':row['original_index'],'document_index': row['index'], colname: sent.text})
     return pd.DataFrame(expanded_data)
 
-# def expand_sentences_spacy(df, colname, custom_delimiters:List[str]=[], nlp=nlp):
 
-#     #print("Custom delimiters:", custom_delimiters)
-
-#     expanded_data = []
-#     df = df.drop('index', axis = 1, errors="ignore").reset_index(names='index')
-
-#     sentencizer = Sentencizer()
-
-#     new_punct_chars = sentencizer.default_punct_chars
-#     if custom_delimiters:
-#         new_punct_chars.extend(custom_delimiters)
-
-#     pattern = "(" + "|".join(re.escape(punct) for punct in new_punct_chars) + ")"
-#     #print("Patterns:", pattern)
-#     split_list = []
-
-#     for idx, string in enumerate(df[colname]):
-#         new_split = re.split(pattern, string)
-#         for n, sentence in enumerate(new_split):
-#             if sentence:
-#                 # If there is a split delimiter in the 'sentence' after, add it to the previous sentence as it will be removed at a later step
-#                 if n + 1 < len(new_split):
-#                     if new_split[n + 1]:
-#                         # If the next split is in the list of split characters, then add it to this current sentence
-#                         if new_split[n + 1] in new_punct_chars:
-#                             split_list.append({'document_index': idx, colname: sentence + new_split[n + 1]})
-#                 else:
-#                     split_list.append({'document_index': idx, colname: sentence})
-    
-#     return pd.DataFrame(split_list)
-
-def anon_consistent_names(df):
+def anon_consistent_names(df:pd.DataFrame):
     # ## Pick out common names and replace them with the same person value
     df_dict = df.to_dict(orient="list")
 
