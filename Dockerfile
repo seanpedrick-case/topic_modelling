@@ -19,7 +19,7 @@ RUN pip install torch==2.4.0+cpu --target=/install --index-url https://download.
 && pip install --no-cache-dir --target=/install sentence-transformers==3.0.1 --no-deps \
 && pip install --no-cache-dir --target=/install bertopic==0.16.2 --no-deps \
 && pip install --no-cache-dir --target=/install -r requirements_aws.txt \
-&& pip install --no-cache-dir --target=/install gradio=4.44.0
+&& pip install --no-cache-dir --target=/install gradio==4.44.0
 
 # Add /install to the PYTHONPATH
 ENV PYTHONPATH="/install:${PYTHONPATH}"
