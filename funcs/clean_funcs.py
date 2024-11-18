@@ -1,5 +1,6 @@
 import re
 import string
+import unicodedata
 import polars as pl
 import gradio as gr
 
@@ -17,13 +18,36 @@ num_pattern_regex = r'[0-9]+'
 nums_two_more_regex = r'\b\d+[\.|\,]\d+\b|\b[0-9]{2,}\b|\b[0-9]+\s[0-9]+\b' # Should match two digit numbers or more, and also if there are full stops or commas in between
 postcode_pattern_regex = r'(\b(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]? ?[0-9][A-Z]{2})|((GIR ?0A{2})\b$)|(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]? ?[0-9]{1}?)$)|(\b(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]?)\b$)'
 multiple_spaces_regex = r'\s{2,}'
+multiple_new_lines_regex = r'(\r\n|\n)+'
 
 def initial_clean(texts, custom_regex, progress=gr.Progress()):
+
+    for text in texts:
+        if not text:
+            text = ""
+
+        # Normalize unicode characters to decompose any special forms
+        normalized_text = unicodedata.normalize('NFKC', text)
+
+        # Replace smart quotes and special punctuation with standard ASCII equivalents
+        replacements = {
+            '‘': "'", '’': "'", '“': '"', '”': '"', 
+            '–': '-', '—': '-', '…': '...', '•': '*',
+        }
+
+        # Perform replacements
+        for old_char, new_char in replacements.items():
+            normalised_text = normalized_text.replace(old_char, new_char)
+
+        text = normalised_text
+
     # Convert to polars Series
     texts = pl.Series(texts).str.strip_chars()
     
     # Define a list of patterns and their replacements
     patterns = [
+        (multiple_new_lines_regex, '  '),
+        (r'\r', ''),
         (url_pattern, ' '),
         (html_pattern_regex, ' '),
         (html_start_pattern_end_dots_regex, ' '),
@@ -31,7 +55,8 @@ def initial_clean(texts, custom_regex, progress=gr.Progress()):
         (email_pattern_regex, ' '),
         (nums_two_more_regex, ' '),
         (postcode_pattern_regex, ' '),
-        (multiple_spaces_regex, ' ')
+        (multiple_spaces_regex, ' '),
+        (r"(\p{P})\p{P}+", "${1}")
     ]
     
     # Apply each regex replacement
@@ -43,21 +68,44 @@ def initial_clean(texts, custom_regex, progress=gr.Progress()):
     
     return texts
 
+# def regex_clean(texts, custom_regex, progress=gr.Progress()):
+#     texts = pl.Series(texts).str.strip_chars()
+
+#     # Allow for custom regex patterns to be removed
+#     if len(custom_regex) > 0:
+#         for pattern in custom_regex:
+#             raw_string_pattern = r'{}'.format(pattern)
+#             print("Removing regex pattern: ", raw_string_pattern)
+#             texts = texts.str.replace_all(raw_string_pattern, ' ')
+
+#     texts = texts.str.replace_all(multiple_spaces_regex, ' ')
+
+#     texts = texts.to_list()
+    
+#     return texts
+
 def regex_clean(texts, custom_regex, progress=gr.Progress()):
     texts = pl.Series(texts).str.strip_chars()
 
     # Allow for custom regex patterns to be removed
     if len(custom_regex) > 0:
         for pattern in custom_regex:
-            raw_string_pattern = r'{}'.format(pattern)
-            print("Removing regex pattern: ", raw_string_pattern)
-            texts = texts.str.replace_all(raw_string_pattern, ' ')
+            print("Removing regex pattern:", pattern)
+            # Method 1: Using polars with regex flags
+            texts = texts.str.replace_all(pattern, ' ')
+            
+            # Alternative Method 2: Using Python re directly if needed
+            #texts = pl.Series([re.sub(pattern, ' ', text, flags=re.DOTALL) 
+            #                   for text in texts])
 
+    # Replace multiple spaces with a single space
     texts = texts.str.replace_all(multiple_spaces_regex, ' ')
-
+    
+    # Convert series back to a list
     texts = texts.to_list()
     
     return texts
+
 
 def remove_hyphens(text_text):
     return re.sub(r'(\w+)-(\w+)-?(\w)?', r'\1 \2 \3', text_text)

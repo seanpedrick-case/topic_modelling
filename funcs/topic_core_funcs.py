@@ -168,6 +168,8 @@ def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str,
 
         print(time_out)
 
+        data[in_colnames_list_first] = data[in_colnames_list_first].str.strip()
+
     out_data_name = output_folder + data_file_name_no_ext + "_" + today_rev +  ".csv"
     data.to_csv(out_data_name)
     output_list.append(out_data_name)
@@ -208,7 +210,8 @@ def extract_topics(
     min_word_occurence_slider: float, 
     max_word_occurence_slider: float, 
     split_sentence_drop: str,
-    random_seed: int = random_seed, 
+    random_seed: int = random_seed,
+    return_only_embeddings_drop: str = "No",
     output_folder: str = output_folder, 
     umap_n_neighbours:int = umap_n_neighbours,
     umap_min_dist:float = umap_min_dist,
@@ -235,6 +238,7 @@ def extract_topics(
         embeddings_type_state (str): State of the embeddings type.
         zero_shot_similarity (float): Zero-shot similarity threshold.
         random_seed (int): Random seed for reproducibility.
+        return_only_embeddings_drop (str): If you only want to output embeddings.
         calc_probs (str): Whether to calculate all topic probabilities.
         vectoriser_state (CountVectorizer): Vectorizer state.
         min_word_occurence_slider (float): Minimum word occurrence slider value.
@@ -336,6 +340,25 @@ def extract_topics(
         umap_model = UMAP(n_neighbors=umap_n_neighbours, n_components=5, min_dist=umap_min_dist, metric=umap_metric, low_memory=True, random_state=random_seed)
 
     embeddings_out = make_or_load_embeddings(docs, file_list, embeddings_out, embedding_model, embeddings_super_compress, high_quality_mode)
+
+     # If you want to save your embedding files
+    if return_intermediate_files == "Yes":
+        print("Saving embeddings to file")
+        if high_quality_mode == "No":
+            embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'tfidf_embeddings.npz'
+        else:
+            if embeddings_super_compress == "No":
+                embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'large_embeddings.npz'
+            else:
+                embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'large_embeddings_compress.npz'
+
+        np.savez_compressed(embeddings_file_name, embeddings_out)
+
+        output_list.append(embeddings_file_name)
+
+        if return_only_embeddings_drop == "Yes":
+
+            return "Embeddings output returned", output_list, embeddings_out, embeddings_type_state, data_file_name_no_ext, None, docs, vectoriser_state, []
 
     # This is saved as a Gradio state object
     vectoriser_model = vectoriser_state
@@ -466,20 +489,7 @@ def extract_topics(
     # Outputs
     output_list, output_text = save_topic_outputs(topic_model, data_file_name_no_ext, output_list, docs, save_topic_model, data, split_sentence_drop)
 
-     # If you want to save your embedding files
-    if return_intermediate_files == "Yes":
-        print("Saving embeddings to file")
-        if high_quality_mode == "No":
-            embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'tfidf_embeddings.npz'
-        else:
-            if embeddings_super_compress == "No":
-                embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'large_embeddings.npz'
-            else:
-                embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'large_embeddings_compress.npz'
-
-        np.savez_compressed(embeddings_file_name, embeddings_out)
-
-        output_list.append(embeddings_file_name)
+    
 
     all_toc = time.perf_counter()
     time_out = f"All processes took {all_toc - all_tic:0.1f} seconds."

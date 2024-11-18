@@ -40,7 +40,7 @@ with block:
     # Topic modeller
     Generate topics from open text in tabular data, based on [BERTopic](https://maartengr.github.io/BERTopic/). Upload a data file (csv, xlsx, or parquet), then specify the open text column that you want to use to generate topics. Click 'Extract topics' after you have selected the minimum similar documents per topic and maximum total topics. Duplicate this space, or clone to your computer to avoid queues here!
     
-    Uses fast TF-IDF-based embeddings by default, which are fast but does not lead to high quality clusering. Change to higher quality [mxbai-embed-large-v1](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1) model embeddings (512 dimensions) for better results but slower processing time. If you have an embeddings .npz file previously made using this model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics for zero-shot modelling, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available such as maximum topics allowed, minimum documents per topic etc.. Topic representation with LLMs currently based on [Phi-3.1-mini-128k-instruct-GGUF](https://huggingface.co/bartowski/Phi-3.1-mini-128k-instruct-GGUF), which is quite slow on CPU, so use a GPU-enabled computer if possible, building from the requirements_gpu.txt file in the base folder.
+    Uses fast TF-IDF-based embeddings by default, which are fast but does not lead to high quality clusering. Change to higher quality [mxbai-embed-large-v1](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1) model embeddings (1024 dimensions) for better results but slower processing time. If you have an embeddings .npz file previously made using this model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics for zero-shot modelling, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available such as maximum topics allowed, minimum documents per topic etc.. Topic representation with LLMs currently based on [Phi-3.1-mini-128k-instruct-GGUF](https://huggingface.co/bartowski/Phi-3.1-mini-128k-instruct-GGUF), which is quite slow on CPU, so use a GPU-enabled computer if possible, building from the requirements_gpu.txt file in the base folder.
 
     For small datasets, consider breaking up your text into sentences under 'Clean data' -> 'Split open text...' before topic modelling.
 
@@ -124,8 +124,11 @@ with block:
                 calc_probs = gr.Dropdown(label="Calculate all topic probabilities", value="No", choices=["Yes", "No"])
             with gr.Row():
                 embedding_super_compress = gr.Dropdown(label = "Round embeddings to three dp: smaller files but lower quality.", value="No", choices=["Yes", "No"])
+                return_only_embeddings_drop = gr.Dropdown(label="Return only embeddings", value="No", choices=["Yes", "No"])
+            with gr.Row():                
                 return_intermediate_files = gr.Dropdown(label = "Return intermediate processing files from file preparation.", value="Yes", choices=["Yes", "No"])
                 save_topic_model = gr.Dropdown(label = "Save topic model to BERTopic format pkl file.", value="No", choices=["Yes", "No"])
+            
 
     # Load in data. Update column names dropdown when file uploaded
     in_files.upload(fn=initial_file_load, inputs=[in_files], outputs=[in_colnames, in_label, data_state, output_single_text, topic_model_state, embeddings_state, data_file_name_no_ext_state, label_list_state, original_data_state])
@@ -141,7 +144,7 @@ with block:
     zero_shot_optimiser_btn.click(fn=optimise_zero_shot, outputs=[quality_mode_drop, min_docs_slider, max_topics_slider, min_word_occurence_slider, max_word_occurence_slider, zero_shot_similarity])
 
     # Extract topics
-    topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, data_file_name_no_ext_state, label_list_state, return_intermediate_files, embedding_super_compress, quality_mode_drop, save_topic_model, embeddings_state, embeddings_type_state, zero_shot_similarity, calc_probs, vectoriser_state, min_word_occurence_slider, max_word_occurence_slider, split_sentence_drop, seed_number], outputs=[output_single_text, output_file, embeddings_state, embeddings_type_state, data_file_name_no_ext_state, topic_model_state, docs_state, vectoriser_state, assigned_topics_state], api_name="topics")
+    topics_btn.click(fn=extract_topics, inputs=[data_state, in_files, min_docs_slider, in_colnames, max_topics_slider, candidate_topics, data_file_name_no_ext_state, label_list_state, return_intermediate_files, embedding_super_compress, quality_mode_drop, save_topic_model, embeddings_state, embeddings_type_state, zero_shot_similarity, calc_probs, vectoriser_state, min_word_occurence_slider, max_word_occurence_slider, split_sentence_drop, seed_number, return_only_embeddings_drop], outputs=[output_single_text, output_file, embeddings_state, embeddings_type_state, data_file_name_no_ext_state, topic_model_state, docs_state, vectoriser_state, assigned_topics_state], api_name="topics")
 
     # Reduce outliers
     reduce_outliers_btn.click(fn=reduce_outliers, inputs=[topic_model_state, docs_state, embeddings_state, data_file_name_no_ext_state, assigned_topics_state, vectoriser_state, save_topic_model, split_sentence_drop, data_state], outputs=[output_single_text, output_file, topic_model_state], api_name="reduce_outliers")
