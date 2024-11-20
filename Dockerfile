@@ -16,10 +16,10 @@ WORKDIR /src
 COPY requirements_aws.txt .
 
 RUN pip install torch==2.4.0+cpu --target=/install --index-url https://download.pytorch.org/whl/cpu \
-&& pip install --no-cache-dir --target=/install sentence-transformers==3.0.1 --no-deps \
-&& pip install --no-cache-dir --target=/install bertopic==0.16.2 --no-deps \
+&& pip install --no-cache-dir --target=/install sentence-transformers==3.2.0 --no-deps \
+&& pip install --no-cache-dir --target=/install bertopic==0.16.4 --no-deps \
 && pip install --no-cache-dir --target=/install -r requirements_aws.txt \
-&& pip install --no-cache-dir --target=/install gradio==4.44.0
+&& pip install --no-cache-dir --target=/install gradio==5.6.0
 
 # Add /install to the PYTHONPATH
 ENV PYTHONPATH="/install:${PYTHONPATH}"
@@ -44,7 +44,7 @@ RUN mkdir -p /home/user/app/output /home/user/.cache/huggingface/hub /home/user/
     && chown -R user:user /home/user
 
 # Download the quantised phi model directly with curl. Changed at it is so big - not loaded
-#RUN curl -L -o /home/user/app/model/rep/Phi-3.1-mini-128k-instruct-Q4_K_M.gguf https://huggingface.co/bartowski/Phi-3.1-mini-128k-instruct-GGUF/tree/main/Phi-3.1-mini-128k-instruct-Q4_K_M.gguf
+#RUN curl -L -o /home/user/app/model/rep/Llama-3.2-3B-Instruct-Q5_K_M.gguf https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/tree/main/Llama-3.2-3B-Instruct-Q5_K_M.gguf
 
 # Copy models from the builder stage
 COPY --from=builder /model/rep /home/user/app/model/rep
