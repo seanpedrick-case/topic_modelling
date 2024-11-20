@@ -30,6 +30,7 @@ import re
 import secrets
 import base64
 import time
+from gradio import Progress
 
 import pandas as pd
 
@@ -42,7 +43,7 @@ from presidio_anonymizer.entities import OperatorConfig
 from typing import List
 
 # Function to Split Text and Create DataFrame using SpaCy
-def expand_sentences_spacy(df:pd.DataFrame, colname:str, custom_delimiters:List[str]=[], nlp=nlp):
+def expand_sentences_spacy(df:pd.DataFrame, colname:str, custom_delimiters:List[str]=[], nlp=nlp, progress=Progress(track_tqdm=True)):
     '''
     Expand passages into sentences using Spacy's built in NLP capabilities
     '''
@@ -50,7 +51,7 @@ def expand_sentences_spacy(df:pd.DataFrame, colname:str, custom_delimiters:List[
 
     df = df.drop('index', axis = 1, errors="ignore").reset_index(names='index')
 
-    for index, row in df.iterrows():
+    for index, row in progress.tqdm(df.iterrows(), unit = "rows", desc="Splitting sentences"):
         doc = nlp(row[colname])
         for sent in doc.sents:
             expanded_data.append({'original_index':row['original_index'],'document_index': row['index'], colname: sent.text})
@@ -201,11 +202,11 @@ def anonymise_script(df, chosen_col, anon_strat):
     analyse_tic = time.perf_counter()
     #analyzer_results = batch_analyzer.analyze_dict(df_dict, language="en")
     analyzer_results = analyze_dict(batch_analyzer, df_dict, language="en")
-    #print(analyzer_results)
+
     analyzer_results = list(analyzer_results)
 
     analyse_toc = time.perf_counter()
-    analyse_time_out = f"Analysing the text took {analyse_toc - analyse_tic:0.1f} seconds."
+    analyse_time_out = f"Anonymising the text took {analyse_toc - analyse_tic:0.1f} seconds."
     print(analyse_time_out)
 
     # Generate a 128-bit AES key. Then encode the key using base64 to get a string representation

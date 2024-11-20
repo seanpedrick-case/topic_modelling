@@ -1,7 +1,7 @@
 from huggingface_hub import hf_hub_download
 
 # Define the repository and files to download
-repo_id = "sentence-transformers/all-MiniLM-L6-v2" #"BAAI/bge-small-en-v1.5"
+repo_id = "mixedbread-ai/mxbai-embed-xsmall-v1" #"sentence-transformers/all-MiniLM-L6-v2" #"BAAI/bge-small-en-v1.5"
 files_to_download = [
     "config.json",
     "pytorch_model.bin",

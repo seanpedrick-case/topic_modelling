@@ -13,7 +13,7 @@ PandasDataFrame = Type[pd.DataFrame]
 
 from funcs.clean_funcs import initial_clean, regex_clean
 from funcs.anonymiser import expand_sentences_spacy
-from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs, output_folder, get_or_create_env_var
+from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs, output_folder, get_or_create_env_var, custom_regex_load
 from funcs.embeddings import make_or_load_embeddings, torch_device
 from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, hierarchical_topics_custom, visualize_hierarchy_custom
 from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag, random_seed, RUNNING_ON_AWS
@@ -37,13 +37,13 @@ today_rev = datetime.now().strftime("%Y%m%d")
 
 # Load embeddings
 if RUNNING_ON_AWS=="0":
-    embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"BAAI/large-small-en-v1.5" #"jinaai/jina-embeddings-v2-base-en"
+    embeddings_name = "mixedbread-ai/mxbai-embed-xsmall-v1" #"mixedbread-ai/mxbai-embed-large-v1"
 else:
-    embeddings_name = "sentence-transformers/all-MiniLM-L6-v2"
+    embeddings_name = "mixedbread-ai/mxbai-embed-xsmall-v1"
 
 # LLM model used for representing topics
-hf_model_name =  "bartowski/Phi-3.1-mini-128k-instruct-GGUF"#'second-state/stablelm-2-zephyr-1.6b-GGUF' #'TheBloke/phi-2-orange-GGUF' #'NousResearch/Nous-Capybara-7B-V1.9-GGUF'
-hf_model_file =   "Phi-3.1-mini-128k-instruct-Q4_K_M.gguf"#'stablelm-2-zephyr-1_6b-Q5_K_M.gguf' # 'phi-2-orange.Q5_K_M.gguf' #'Capybara-7B-V1.9-Q5_K_M.gguf'
+hf_model_name = "bartowski/Llama-3.2-3B-Instruct-GGUF" #"bartowski/Phi-3.1-mini-128k-instruct-GGUF"
+hf_model_file = "Llama-3.2-3B-Instruct-Q5_K_M.gguf" #"Phi-3.1-mini-128k-instruct-Q4_K_M.gguf"
 
 # When topic modelling column is chosen, change the default visualisation column to the same
 def change_default_vis_col(in_colnames:List[str]):
@@ -55,7 +55,7 @@ def change_default_vis_col(in_colnames:List[str]):
     else:
         return gr.Dropdown()
 
-def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str, custom_regex: pd.DataFrame, clean_text: str, drop_duplicate_text: str, anonymise_drop: str, sentence_split_drop: str, min_sentence_length: int, embeddings_state: dict, progress: gr.Progress = gr.Progress(track_tqdm=True)) -> tuple:
+def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str, custom_regex: pd.DataFrame, clean_text: str, drop_duplicate_text: str, anonymise_drop: str, sentence_split_drop: str, min_sentence_length: int, embeddings_state: dict, output_folder: str = output_folder, progress: gr.Progress = gr.Progress(track_tqdm=True)) -> tuple:
     """
     Pre-processes the input data by cleaning text, removing duplicates, anonymizing data, and splitting sentences based on the provided options.
 
@@ -70,6 +70,7 @@ def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str,
         sentence_split_drop (str): Option to split text into sentences ("Yes" or "No").
         min_sentence_length (int): Minimum length of sentences after split (integer value of character length)
         embeddings_state (dict): State of the embeddings.
+        output_folder (str, optional): Output folder. Defaults to output_folder.
         progress (gr.Progress, optional): Progress tracker for the cleaning process.
 
     Returns:
@@ -80,6 +81,10 @@ def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str,
     output_list = []
 
     progress(0, desc = "Cleaning data")
+
+    # If custom_regex is a string, assume this is a string path, and load in the data from the path
+    if isinstance(custom_regex, str):
+       custom_regex_text, custom_regex =  custom_regex_load(custom_regex)
 
     if not in_colnames:
         error_message = "Please enter one column name to use for cleaning and finding topics."
@@ -132,7 +137,7 @@ def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str,
         #print("Data shape after duplicate/null removal: ", data.shape)
 
     if anonymise_drop == "Yes":
-        progress(0.6, desc= "Anonymising data")
+        progress(0.4, desc= "Anonymising data")
 
         if '_anon' not in data_file_name_no_ext:
             data_file_name_no_ext = data_file_name_no_ext + "_anon"
@@ -261,7 +266,12 @@ def extract_topics(
     vectoriser_state = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=min_word_occurence_slider, max_df=max_word_occurence_slider)
 
     output_list = []
-    file_list = [string.name for string in in_files]
+
+    # If in_file is a string file path, otherwise assume it is a Gradio file input component
+    if isinstance(in_files, str):
+        file_list = [in_files]
+    else:
+        file_list = [string.name for string in in_files]
 
     if calc_probs == "No":
         calc_probs = False
@@ -351,6 +361,10 @@ def extract_topics(
                 embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'large_embeddings.npz'
             else:
                 embeddings_file_name = output_folder + data_file_name_no_ext + '_' + 'large_embeddings_compress.npz'
+
+        print("output_folder:", output_folder)
+        print("data_file_name_no_ext:", data_file_name_no_ext)
+        print("embeddings_file_name:", embeddings_file_name)
 
         np.savez_compressed(embeddings_file_name, embeddings_out)
 

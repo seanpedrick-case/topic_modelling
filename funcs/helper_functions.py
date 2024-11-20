@@ -162,7 +162,11 @@ def initial_file_load(in_file):
     topic_model = None
     embeddings = np.array([])
 
-    file_list = [string.name for string in in_file]
+    # If in_file is a string file path, otherwise assume it is a Gradio file input component
+    if isinstance(in_file, str):
+        file_list = [in_file]
+    else:
+        file_list = [string.name for string in in_file]
 
     data_file_names = [string for string in file_list if "npz" not in string.lower() and "pkl" not in string.lower() and "topic_list.csv" not in string.lower()]
     if data_file_names:
@@ -207,7 +211,11 @@ def custom_regex_load(in_file):
 
     custom_regex = pd.DataFrame()
 
-    file_list = [string.name for string in in_file]
+    # If in_file is a string file path, otherwise assume it is a Gradio file input component
+    if isinstance(in_file, str):
+        file_list = [in_file]
+    else:
+        file_list = [string.name for string in in_file]
 
     regex_file_names = [string for string in file_list if "csv" in string.lower()]
     if regex_file_names:
@@ -240,6 +248,8 @@ def get_file_path_end_with_ext(file_path):
     match = re.search(r'(.*[\/\\])?(.+)$', file_path)
         
     filename_end = match.group(2) if match else ''
+
+    print("filename_end:", filename_end)
 
     return filename_end
 

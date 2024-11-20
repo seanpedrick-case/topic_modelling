@@ -1,0 +1,3 @@
+# To just get embeddings out
+
+python run_from_cmd_line.py --data_file "C:\Users\SPedrickCase\OneDrive - Lambeth Council\Apps\topic_modelling\examples\combined_case_notes.csv" --in_colnames "Case Note" --clean_text Yes --drop_duplicate_text No --anonymise_drop Yes --split_sentence_drop No --custom_regex_file "C:\Users\SPedrickCase\OneDrive - Lambeth Council\Apps\topic_modelling\examples\regex_to_remove.csv" --embeddings_high_quality_mode Yes --return_only_embeddings_drop Yes --output_folder "C:\Users\SPedrickCase\OneDrive - Lambeth Council\2024\ASC Project\asc_predict\apps\topic_modelling\output"

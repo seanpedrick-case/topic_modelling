@@ -70,7 +70,9 @@ def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndar
 
             elif high_quality_mode_opt == "Yes":
                 print("Creating dense embeddings based on transformers model")
-
+                
+                # Convert model to half precision (fp16)
+                embedding_model.half()
                 embeddings_out = embedding_model.encode(sentences=docs, show_progress_bar = True, batch_size = 32)#, precision="int8") # For large
 
             toc = time.perf_counter()

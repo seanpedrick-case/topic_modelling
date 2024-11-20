@@ -26,16 +26,12 @@ def analyze_iterator_custom(
         texts = self._validate_types(texts)
 
         # Process the texts as batch for improved performance
-        nlp_artifacts_batch: Iterator[
-            Tuple[str, NlpArtifacts]
-        ] = self.analyzer_engine.nlp_engine.process_batch(
+        nlp_artifacts_batch: List[Tuple[str, NlpArtifacts]] = list(self.analyzer_engine.nlp_engine.process_batch(
             texts=texts, language=language
-        )
-
-        
+        ))
 
         list_results = []
-        for text, nlp_artifacts in progress.tqdm(nlp_artifacts_batch, total = list_length, desc = "Analysing text for personal information", unit = "rows"):
+        for text, nlp_artifacts in tqdm(nlp_artifacts_batch, total=list_length, desc="Analysing text for personal information", unit="rows"):
             results = self.analyzer_engine.analyze(
                 text=str(text), nlp_artifacts=nlp_artifacts, language=language, **kwargs
             )

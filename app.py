@@ -1,11 +1,13 @@
 import os
+import socket
 import gradio as gr
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
 from funcs.topic_core_funcs import pre_clean, optimise_zero_shot, extract_topics, reduce_outliers, represent_topics, visualise_topics, save_as_pytorch_model, change_default_vis_col
 from funcs.helper_functions import initial_file_load, custom_regex_load, ensure_output_folder_exists, output_folder, get_connection_params, get_or_create_env_var
-from funcs.embeddings import make_or_load_embeddings
+from funcs.aws_functions import upload_file_to_s3
 from sklearn.feature_extraction.text import CountVectorizer
 from funcs.auth import authenticate_user, download_file_from_s3
 
@@ -14,11 +16,18 @@ max_word_occurence_slider_default = 0.95
 
 ensure_output_folder_exists()
 
+host_name = socket.gethostname()
+
+today_rev = datetime.now().strftime("%Y%m%d")
+feedback_logs_folder = 'feedback/' + today_rev + '/' + host_name + '/'
+access_logs_folder = 'logs/' + today_rev + '/' + host_name + '/'
+usage_logs_folder = 'usage/' + today_rev + '/' + host_name + '/'
+
 # Gradio app
 
-block = gr.Blocks(theme = gr.themes.Base())
+app = gr.Blocks(theme = gr.themes.Base())
 
-with block:
+with app:
 
     original_data_state  = gr.State(pd.DataFrame())
     data_state = gr.State(pd.DataFrame())
@@ -32,15 +41,27 @@ with block:
     label_list_state = gr.State(pd.DataFrame())
     vectoriser_state = gr.State(CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=min_word_occurence_slider_default, max_df=max_word_occurence_slider_default))
 
-    session_hash_state = gr.State("")
-    s3_output_folder_state = gr.State("")
+    # Some invisible textboxes to hold some state values
+    session_hash_textbox = gr.Textbox("", visible=False, label="session_hash_textbox")
+    s3_output_folder_textbox = gr.Textbox("", visible=False, label="s3_output_folder_textbox")
+    s3_logs_output_textbox = gr.Textbox("", visible=False, label="s3_logs_output_textbox")
+
+    # Logging state
+    log_file_name = 'log.csv'
+
+    feedback_logs_state = gr.State(feedback_logs_folder + log_file_name)
+    feedback_s3_logs_loc_state = gr.State(feedback_logs_folder)
+    access_logs_state = gr.State(access_logs_folder + log_file_name)
+    access_s3_logs_loc_state = gr.State(access_logs_folder)
+    usage_logs_state = gr.State(usage_logs_folder + log_file_name)
+    usage_s3_logs_loc_state = gr.State(usage_logs_folder)
  
     gr.Markdown(
     """
     # Topic modeller
     Generate topics from open text in tabular data, based on [BERTopic](https://maartengr.github.io/BERTopic/). Upload a data file (csv, xlsx, or parquet), then specify the open text column that you want to use to generate topics. Click 'Extract topics' after you have selected the minimum similar documents per topic and maximum total topics. Duplicate this space, or clone to your computer to avoid queues here!
     
-    Uses fast TF-IDF-based embeddings by default, which are fast but does not lead to high quality clusering. Change to higher quality [mxbai-embed-large-v1](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1) model embeddings (1024 dimensions) for better results but slower processing time. If you have an embeddings .npz file previously made using this model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics for zero-shot modelling, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available such as maximum topics allowed, minimum documents per topic etc.. Topic representation with LLMs currently based on [Phi-3.1-mini-128k-instruct-GGUF](https://huggingface.co/bartowski/Phi-3.1-mini-128k-instruct-GGUF), which is quite slow on CPU, so use a GPU-enabled computer if possible, building from the requirements_gpu.txt file in the base folder.
+    Uses fast TF-IDF based embeddings by default, which are fast but does not lead to high quality clusering. Change to higher quality [mxbai-embed-xsmall-v1](mixedbread-ai/mxbai-embed-xsmall-v1) model embeddings (384 dimensions) for better results but slower processing time. If you have an embeddings .npz file previously made using this model, you can load this in at the same time to skip the first modelling step. If you have a pre-defined list of topics for zero-shot modelling, you can upload this as a csv file under 'I have my own list of topics...'. Further configuration options are available such as maximum topics allowed, minimum documents per topic etc.. Topic representation with LLMs currently based on [Llama-3.2-3B-Instruct-Q5_K_M.gguf](https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF), which is quite slow on CPU, so use a GPU-enabled computer if possible, building from the requirements_gpu.txt file in the base folder.
 
     For small datasets, consider breaking up your text into sentences under 'Clean data' -> 'Split open text...' before topic modelling.
 
@@ -57,7 +78,7 @@ with block:
             with gr.Row():
                 clean_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove html, URLs, non-ASCII, multiple digits, emails, postcodes (UK).")
                 drop_duplicate_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove duplicate text, drop < 50 character strings.")
-                anonymise_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Anonymise data on file load. Personal details are redacted - not 100% effective and slow!")
+                anonymise_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Redact personal information - not 100% effective and slow!")
                 #with gr.Row():
                 split_sentence_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Split text into sentences. Useful for small datasets.")
                 #additional_custom_delimiters_drop = gr.Dropdown(choices=["and", ",", "as well as", "also"], multiselect=True, label="Additional custom delimiters to split sentences.")
@@ -159,14 +180,25 @@ with block:
     plot_btn.click(fn=visualise_topics, inputs=[topic_model_state, data_state, data_file_name_no_ext_state, quality_mode_drop, embeddings_state, in_label, in_colnames, legend_label, sample_slide, visualisation_type_radio, seed_number], outputs=[vis_output_single_text, out_plot_file, plot, plot_2], api_name="plot")
 
     # Get session hash from connection parameters
-    block.load(get_connection_params, inputs=None, outputs=[session_hash_state, s3_output_folder_state])
+    app.load(get_connection_params, inputs=None, outputs=[session_hash_textbox, s3_output_folder_textbox])
+
+    # Log usernames and times of access to file (to know who is using the app when running on AWS)
+    access_callback = gr.CSVLogger(dataset_file_name=log_file_name)
+    access_callback.setup([session_hash_textbox], access_logs_folder)
+    session_hash_textbox.change(lambda *args: access_callback.flag(list(args)), [session_hash_textbox], None, preprocess=False).\
+    then(fn = upload_file_to_s3, inputs=[access_logs_state, access_s3_logs_loc_state], outputs=[s3_logs_output_textbox])
+
+    # Log processing time/token usage when making a query
+    usage_callback = gr.CSVLogger(dataset_file_name=log_file_name)
+    usage_callback.setup([session_hash_textbox], usage_logs_folder)
+    output_single_text.change(lambda *args: usage_callback.flag(list(args)), [session_hash_textbox, data_file_name_no_ext_state], None, preprocess=False).\
+    then(fn = upload_file_to_s3, inputs=[usage_logs_state, usage_s3_logs_loc_state], outputs=[s3_logs_output_textbox])
 
 COGNITO_AUTH = get_or_create_env_var('COGNITO_AUTH', '0')
 print(f'The value of COGNITO_AUTH is {COGNITO_AUTH}')
 
-
 if __name__ == "__main__":
     if os.environ['COGNITO_AUTH'] == "1":
-        block.queue().launch(show_error=True, auth=authenticate_user)
+        app.queue().launch(show_error=True, auth=authenticate_user)
     else:
-        block.queue().launch(show_error=True, inbrowser=True)
+        app.queue().launch(show_error=True, inbrowser=True)
