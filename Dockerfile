@@ -2,7 +2,7 @@
 FROM public.ecr.aws/docker/library/python:3.11.9-slim-bookworm AS builder
 
 # Install Lambda web adapter in case you want to run with with an AWS Lamba function URL (not essential if not using Lambda)
-#COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.3 /lambda-adapter /opt/extensions/lambda-adapter
+#COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
 
 # Install system dependencies
 RUN apt-get update && rm -rf /var/lib/apt/lists/*
@@ -15,7 +15,7 @@ WORKDIR /src
 # Copy requirements file and install dependencies. Sentence transformers and Bertopic are installed without dependencies so that torch is not reinstalled.
 COPY requirements_aws.txt .
 
-RUN pip install torch==2.4.0+cpu --target=/install --index-url https://download.pytorch.org/whl/cpu \
+RUN pip install torch==2.5.1+cpu --target=/install --index-url https://download.pytorch.org/whl/cpu \
 && pip install --no-cache-dir --target=/install sentence-transformers==3.2.0 --no-deps \
 && pip install --no-cache-dir --target=/install bertopic==0.16.4 --no-deps \
 && pip install --no-cache-dir --target=/install -r requirements_aws.txt \
