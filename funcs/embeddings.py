@@ -1,7 +1,12 @@
 import time
 import numpy as np
 import os
+import spaces
 from torch import cuda, backends, version
+from sentence_transformers import SentenceTransformer
+from sklearn.pipeline import make_pipeline
+from sklearn.decomposition import TruncatedSVD
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Check for torch cuda
 # If you want to disable cuda for testing purposes
@@ -18,11 +23,9 @@ else:
     torch_device =  "cpu"
     high_quality_mode = "No"
 
-print("Device used is: ", torch_device)
 
-
-
-def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndarray, embedding_model, embeddings_super_compress: str, high_quality_mode_opt: str) -> np.ndarray:
+@spaces.GPU
+def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndarray, embeddings_super_compress: str, high_quality_mode_opt: str, embeddings_name:str="mixedbread-ai/mxbai-embed-xsmall-v1") -> np.ndarray:
     """
     Create or load embeddings for the given documents.
 
@@ -30,13 +33,39 @@ def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndar
         docs (list): List of documents to embed.
         file_list (list): List of file names to check for existing embeddings.
         embeddings_out (np.ndarray): Array to store the embeddings.
-        embedding_model: Model used to generate embeddings.
         embeddings_super_compress (str): Option to super compress embeddings ("Yes" or "No").
         high_quality_mode_opt (str): Option for high quality mode ("Yes" or "No").
 
     Returns:
         np.ndarray: The generated or loaded embeddings.
     """
+
+    if high_quality_mode_opt == "Yes":
+    # Define a list of possible local locations to search for the model
+        local_embeddings_locations = [
+            "model/embed/", # Potential local location
+            "/model/embed/", # Potential location in Docker container
+            "/home/user/app/model/embed/" # This is inside a Docker container
+        ]
+
+        # Attempt to load the model from each local location
+        for location in local_embeddings_locations:
+            try:
+                embedding_model = SentenceTransformer(location)#, truncate_dim=512)
+                print(f"Found local model installation at: {location}")
+                break  # Exit the loop if the model is found
+            except Exception as e:
+                print(f"Failed to load model from {location}: {e}")
+                continue
+        else:
+            # If the loop completes without finding the model in any local location
+            embedding_model = SentenceTransformer(embeddings_name)#, truncate_dim=512)
+            print("Could not find local model installation. Downloading from Huggingface")
+    else:
+        embedding_model = make_pipeline(
+                TfidfVectorizer(),
+                TruncatedSVD(100, random_state=random_seed)
+                )
 
     # If no embeddings found, make or load in
     if embeddings_out.size == 0:
@@ -84,9 +113,9 @@ def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndar
                 embeddings_out = np.round(embeddings_out, 3) 
                 embeddings_out *= 100
 
-        return embeddings_out
+        return embeddings_out, embedding_model
 
     else:
         print("Found pre-loaded embeddings.")
 
-        return embeddings_out
+        return embeddings_out, embedding_model

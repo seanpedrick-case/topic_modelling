@@ -2,6 +2,7 @@ import re
 import string
 import unicodedata
 import polars as pl
+import pandas as pd
 import gradio as gr
 
 # Adding custom words to the stopwords
@@ -15,15 +16,18 @@ html_start_pattern_end_dots_regex = r'<(.*?)\.\.'
 non_ascii_pattern = r'[^\x00-\x7F]+'
 email_pattern_regex = r'\S*@\S*\s?'
 num_pattern_regex = r'[0-9]+'
-nums_two_more_regex = r'\b\d+[\.|\,]\d+\b|\b[0-9]{2,}\b|\b[0-9]+\s[0-9]+\b' # Should match two digit numbers or more, and also if there are full stops or commas in between
+and_sign_regex = r'&'
+forward_slash_regex = r'/'
+nums_five_more_regex = r'\b\d+[\.|\,]\d+\b|\b[0-9]{5,}\b|\b[0-9]+\s[0-9]+\b' # Should match five digit numbers or more, and also if there are full stops or commas in between
 postcode_pattern_regex = r'(\b(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]? ?[0-9][A-Z]{2})|((GIR ?0A{2})\b$)|(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]? ?[0-9]{1}?)$)|(\b(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]?)\b$)'
 multiple_spaces_regex = r'\s{2,}'
 multiple_new_lines_regex = r'(\r\n|\n)+'
+multiple_punctuation_regex = r"(\p{P})\p{P}+"
 
 def initial_clean(texts, custom_regex, progress=gr.Progress()):
 
     for text in texts:
-        if not text:
+        if not text or pd.isnull(text):
             text = ""
 
         # Normalize unicode characters to decompose any special forms
@@ -53,10 +57,12 @@ def initial_clean(texts, custom_regex, progress=gr.Progress()):
         (html_start_pattern_end_dots_regex, ' '),
         (non_ascii_pattern, ' '),
         (email_pattern_regex, ' '),
-        (nums_two_more_regex, ' '),
+        (nums_five_more_regex, ' '),
         (postcode_pattern_regex, ' '),
         (multiple_spaces_regex, ' '),
-        (r"(\p{P})\p{P}+", "${1}")
+        (multiple_punctuation_regex, "${1}"),
+        (and_sign_regex, 'and')#,
+        #(forward_slash_regex, 'or')
     ]
     
     # Apply each regex replacement

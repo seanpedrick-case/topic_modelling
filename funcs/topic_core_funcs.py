@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import time
 from bertopic import BERTopic
+import spaces
 
 from typing import List, Type, Union
 PandasDataFrame = Type[pd.DataFrame]
@@ -17,13 +18,7 @@ from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder
 from funcs.embeddings import make_or_load_embeddings, torch_device
 from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, hierarchical_topics_custom, visualize_hierarchy_custom
 from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag, random_seed, RUNNING_ON_AWS
-
 from sklearn.feature_extraction.text import CountVectorizer
-
-from sentence_transformers import SentenceTransformer
-from sklearn.pipeline import make_pipeline
-from sklearn.decomposition import TruncatedSVD
-from sklearn.feature_extraction.text import TfidfVectorizer
 import funcs.anonymiser as anon
 from umap import UMAP
 
@@ -96,84 +91,88 @@ def pre_clean(data: pd.DataFrame, in_colnames: list, data_file_name_no_ext: str,
     output_list = []
     #file_list = [string.name for string in in_files]
 
-    in_colnames_list_first = in_colnames[0]
+    for in_colnames_list_first in in_colnames:
 
-    # Reset original index to a new column so you can link it to data outputted from cleaning
-    if not "original_index" in data.columns:
-        data = data.reset_index(names="original_index")
+        print("Cleaning column:", in_colnames_list_first)
 
-    if clean_text == "Yes":
-        clean_tic = time.perf_counter()
-        print("Starting data clean.")
+        #in_colnames_list_first = in_colnames[0]
 
-        data[in_colnames_list_first] = initial_clean(data[in_colnames_list_first], [])
+        # Reset original index to a new column so you can link it to data outputted from cleaning
+        if not "original_index" in data.columns:
+            data = data.reset_index(names="original_index")
 
-        if '_clean' not in data_file_name_no_ext:
-            data_file_name_no_ext = data_file_name_no_ext + "_clean"
+        if clean_text == "Yes":
+            clean_tic = time.perf_counter()
+            print("Starting data clean.")
 
-        clean_toc = time.perf_counter()
-        clean_time_out = f"Cleaning the text took {clean_toc - clean_tic:0.1f} seconds."
-        print(clean_time_out)
+            data[in_colnames_list_first] = initial_clean(data[in_colnames_list_first], [])
 
-    # Clean custom regex if exists
-    if not custom_regex.empty:
-        data[in_colnames_list_first] = regex_clean(data[in_colnames_list_first], custom_regex.iloc[:, 0].to_list())
+            if '_clean' not in data_file_name_no_ext:
+                data_file_name_no_ext = data_file_name_no_ext + "_clean"
 
-        if '_clean' not in data_file_name_no_ext:
-            data_file_name_no_ext = data_file_name_no_ext + "_clean"
-        
+            clean_toc = time.perf_counter()
+            clean_time_out = f"Cleaning the text took {clean_toc - clean_tic:0.1f} seconds."
+            print(clean_time_out)
 
-    if drop_duplicate_text == "Yes":
-        progress(0.3, desc= "Drop duplicates - remove short texts")
+        # Clean custom regex if exists
+        if not custom_regex.empty:
+            data[in_colnames_list_first] = regex_clean(data[in_colnames_list_first], custom_regex.iloc[:, 0].to_list())
 
-        data_file_name_no_ext = data_file_name_no_ext + "_dedup"
+            if '_clean' not in data_file_name_no_ext:
+                data_file_name_no_ext = data_file_name_no_ext + "_clean"
+            
 
-        #print("Removing duplicates and short entries from data")
-        #print("Data shape before: ", data.shape)
-        data[in_colnames_list_first] = data[in_colnames_list_first].str.strip()
-        data = data[data[in_colnames_list_first].str.len() >= 50]
-        data = data.drop_duplicates(subset = in_colnames_list_first).dropna(subset= in_colnames_list_first).reset_index()
-        
-        #print("Data shape after duplicate/null removal: ", data.shape)
+        if drop_duplicate_text == "Yes":
+            progress(0.3, desc= "Drop duplicates - remove short texts")
 
-    if anonymise_drop == "Yes":
-        progress(0.4, desc= "Anonymising data")
+            data_file_name_no_ext = data_file_name_no_ext + "_dedup"
 
-        if '_anon' not in data_file_name_no_ext:
-            data_file_name_no_ext = data_file_name_no_ext + "_anon"
+            #print("Removing duplicates and short entries from data")
+            #print("Data shape before: ", data.shape)
+            data[in_colnames_list_first] = data[in_colnames_list_first].str.strip()
+            data = data[data[in_colnames_list_first].str.len() >= 50]
+            data = data.drop_duplicates(subset = in_colnames_list_first).dropna(subset= in_colnames_list_first).reset_index()
+            
+            #print("Data shape after duplicate/null removal: ", data.shape)
 
-        anon_tic = time.perf_counter()
-        
-        data_anon_col, anonymisation_success = anon.anonymise_script(data, in_colnames_list_first, anon_strat="redact")
+        if anonymise_drop == "Yes":
+            progress(0.4, desc= "Anonymising data")
 
-        data[in_colnames_list_first] = data_anon_col
+            if '_anon' not in data_file_name_no_ext:
+                data_file_name_no_ext = data_file_name_no_ext + "_anon"
 
-        print(anonymisation_success)
+            anon_tic = time.perf_counter()
+            
+            data_anon_col, anonymisation_success = anon.anonymise_script(data, in_colnames_list_first, anon_strat="redact")
 
-        anon_toc = time.perf_counter()
-        time_out = f"Anonymising text took {anon_toc - anon_tic:0.1f} seconds"
+            data[in_colnames_list_first] = data_anon_col
 
-        print(time_out)
+            print(anonymisation_success)
 
-    if sentence_split_drop == "Yes":
-        progress(0.6, desc= "Splitting text into sentences")
+            anon_toc = time.perf_counter()
+            time_out = f"Anonymising text took {anon_toc - anon_tic:0.1f} seconds"
 
-        if '_split' not in data_file_name_no_ext:
-            data_file_name_no_ext = data_file_name_no_ext + "_split"
+            print(time_out)
 
-        anon_tic = time.perf_counter()
-        
-        data = expand_sentences_spacy(data, in_colnames_list_first)
-        data = data[data[in_colnames_list_first].str.len() > min_sentence_length] # Keep only rows with at more than 5 characters
-        data[in_colnames_list_first] = data[in_colnames_list_first].str.strip()
-        data.reset_index(inplace=True, drop=True)
+        if sentence_split_drop == "Yes":
+            progress(0.6, desc= "Splitting text into sentences")
 
-        anon_toc = time.perf_counter()
-        time_out = f"Splitting text took {anon_toc - anon_tic:0.1f} seconds"
+            if '_split' not in data_file_name_no_ext:
+                data_file_name_no_ext = data_file_name_no_ext + "_split"
 
-        print(time_out)
+            anon_tic = time.perf_counter()
+            
+            data = expand_sentences_spacy(data, in_colnames_list_first)
+            data = data[data[in_colnames_list_first].str.len() > min_sentence_length] # Keep only rows with at more than 5 characters
+            data[in_colnames_list_first] = data[in_colnames_list_first].str.strip()
+            data.reset_index(inplace=True, drop=True)
 
-        data[in_colnames_list_first] = data[in_colnames_list_first].str.strip()
+            anon_toc = time.perf_counter()
+            time_out = f"Splitting text took {anon_toc - anon_tic:0.1f} seconds"
+
+            print(time_out)
+
+            data[in_colnames_list_first] = data[in_colnames_list_first].str.strip()
 
     out_data_name = output_folder + data_file_name_no_ext + "_" + today_rev +  ".csv"
     data.to_csv(out_data_name)
@@ -299,27 +298,6 @@ def extract_topics(
     if high_quality_mode == "Yes":
         print("Using high quality embedding model")
 
-        # Define a list of possible local locations to search for the model
-        local_embeddings_locations = [
-            "model/embed/", # Potential local location
-            "/model/embed/", # Potential location in Docker container
-            "/home/user/app/model/embed/" # This is inside a Docker container
-        ]
-
-        # Attempt to load the model from each local location
-        for location in local_embeddings_locations:
-            try:
-                embedding_model = SentenceTransformer(location)#, truncate_dim=512)
-                print(f"Found local model installation at: {location}")
-                break  # Exit the loop if the model is found
-            except Exception as e:
-                print(f"Failed to load model from {location}: {e}")
-                continue
-        else:
-            # If the loop completes without finding the model in any local location
-            embedding_model = SentenceTransformer(embeddings_name)#, truncate_dim=512)
-            print("Could not find local model installation. Downloading from Huggingface")
-
         #embedding_model = SentenceTransformer(embeddings_name, truncate_dim=512)       
 
         # If tfidf embeddings currently exist, wipe these empty
@@ -329,15 +307,15 @@ def extract_topics(
         embeddings_type_state = "large"
 
         # UMAP model uses Bertopic defaults
-        umap_model = UMAP(n_neighbors=umap_n_neighbours, n_components=5, min_dist=umap_min_dist, metric=umap_metric, low_memory=False, random_state=random_seed)
+        #umap_model = UMAP(n_neighbors=umap_n_neighbours, n_components=5, min_dist=umap_min_dist, metric=umap_metric, low_memory=False, random_state=random_seed)
 
     else:
         print("Choosing low resource TF-IDF model.")
 
-        embedding_model = make_pipeline(
-                TfidfVectorizer(),
-                TruncatedSVD(100, random_state=random_seed)
-                )
+        # embedding_model = make_pipeline(
+        #         TfidfVectorizer(),
+        #         TruncatedSVD(100, random_state=random_seed)
+        #         )
         
         # If large embeddings currently exist, wipe these empty, then rename embeddings type
         if embeddings_type_state == "large":
@@ -346,10 +324,10 @@ def extract_topics(
         embeddings_type_state = "tfidf"
 
         #umap_model = TruncatedSVD(n_components=5, random_state=random_seed)
-        # UMAP model uses Bertopic defaults
-        umap_model = UMAP(n_neighbors=umap_n_neighbours, n_components=5, min_dist=umap_min_dist, metric=umap_metric, low_memory=True, random_state=random_seed)
+    # UMAP model uses Bertopic defaults
+    umap_model = UMAP(n_neighbors=umap_n_neighbours, n_components=5, min_dist=umap_min_dist, metric=umap_metric, low_memory=True, random_state=random_seed)
 
-    embeddings_out = make_or_load_embeddings(docs, file_list, embeddings_out, embedding_model, embeddings_super_compress, high_quality_mode)
+    embeddings_out, embedding_model = make_or_load_embeddings(docs, file_list, embeddings_out, embeddings_super_compress, high_quality_mode, embeddings_name)
 
      # If you want to save your embedding files
     if return_intermediate_files == "Yes":

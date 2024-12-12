@@ -76,7 +76,7 @@ with app:
 
         with gr.Accordion("Clean data", open = False):
             with gr.Row():
-                clean_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove html, URLs, non-ASCII, multiple digits, emails, postcodes (UK).")
+                clean_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove html, URLs, non-ASCII, large numbers, emails, postcodes (UK).")
                 drop_duplicate_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove duplicate text, drop < 50 character strings.")
                 anonymise_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Redact personal information - not 100% effective and slow!")
                 #with gr.Row():

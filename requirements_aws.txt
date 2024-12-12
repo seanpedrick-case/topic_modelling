@@ -6,7 +6,7 @@ umap-learn==0.5.7
 boto3==1.35.64
 spacy==3.8.0
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz
-gradio==5.6.0
+gradio==5.8.0
 pyarrow
 openpyxl
 Faker

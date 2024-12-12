@@ -3,11 +3,10 @@ pandas==2.2.3
 plotly==5.24.1
 scikit-learn==1.5.2
 umap-learn==0.5.7
-gradio==5.6.0
-boto3==1.35.64
+gradio==5.8.0
+boto3==1.35.71
 transformers==4.46.3
 accelerate==1.1.1
-torch==2.5.1
 bertopic==0.16.4
 spacy==3.8.0
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz
@@ -18,6 +17,9 @@ presidio_analyzer==2.2.355
 presidio_anonymizer==2.2.355
 scipy
 polars
-sentence-transformers==3.2.0
-llama-cpp-python==0.3.2 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-#numpy==1.26.4
+sentence-transformers==3.3.1
+torch==2.4.1 --extra-index-url https://download.pytorch.org/whl/cu121
+#llama-cpp-python==0.2.90 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+# Specify exact llama_cpp wheel for huggingface compatibility
+https://github.com/abetlen/llama-cpp-python/releases/download/v0.2.90-cu121/llama_cpp_python-0.2.90-cp310-cp310-linux_x86_64.whl
+numpy==1.26.4
