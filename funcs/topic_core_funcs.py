@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 import time
 from bertopic import BERTopic
-import spaces
 
 from typing import List, Type, Union
 PandasDataFrame = Type[pd.DataFrame]
