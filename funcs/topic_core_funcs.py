@@ -17,7 +17,8 @@ from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder
 from funcs.embeddings import make_or_load_embeddings, torch_device
 from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, hierarchical_topics_custom, visualize_hierarchy_custom
 from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag, random_seed, RUNNING_ON_AWS
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD
 import funcs.anonymiser as anon
 from umap import UMAP
 
