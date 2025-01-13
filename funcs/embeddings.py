@@ -25,7 +25,7 @@ else:
 
 
 @spaces.GPU
-def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndarray, embeddings_super_compress: str, high_quality_mode_opt: str, embeddings_name:str="mixedbread-ai/mxbai-embed-xsmall-v1") -> np.ndarray:
+def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndarray, embeddings_super_compress: str, high_quality_mode_opt: str, embeddings_name:str="mixedbread-ai/mxbai-embed-xsmall-v1", random_seed:int=42) -> np.ndarray:
     """
     Create or load embeddings for the given documents.
 
@@ -35,6 +35,7 @@ def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndar
         embeddings_out (np.ndarray): Array to store the embeddings.
         embeddings_super_compress (str): Option to super compress embeddings ("Yes" or "No").
         high_quality_mode_opt (str): Option for high quality mode ("Yes" or "No").
+        random_seed (int): Random seed for vectorisation
 
     Returns:
         np.ndarray: The generated or loaded embeddings.

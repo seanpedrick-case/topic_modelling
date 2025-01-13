@@ -326,7 +326,7 @@ def extract_topics(
     # UMAP model uses Bertopic defaults
     umap_model = UMAP(n_neighbors=umap_n_neighbours, n_components=5, min_dist=umap_min_dist, metric=umap_metric, low_memory=True, random_state=random_seed)
 
-    embeddings_out, embedding_model = make_or_load_embeddings(docs, file_list, embeddings_out, embeddings_super_compress, high_quality_mode, embeddings_name)
+    embeddings_out, embedding_model = make_or_load_embeddings(docs, file_list, embeddings_out, embeddings_super_compress, high_quality_mode, embeddings_name, random_seed)
 
      # If you want to save your embedding files
     if return_intermediate_files == "Yes":
