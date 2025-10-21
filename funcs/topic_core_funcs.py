@@ -32,9 +32,9 @@ today_rev = datetime.now().strftime("%Y%m%d")
 
 # Load embeddings
 if RUNNING_ON_AWS=="0":
-    embeddings_name = "mixedbread-ai/mxbai-embed-xsmall-v1" #"mixedbread-ai/mxbai-embed-large-v1"
+    embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"mixedbread-ai/mxbai-embed-xsmall-v1" #"mixedbread-ai/mxbai-embed-large-v1"
 else:
-    embeddings_name = "mixedbread-ai/mxbai-embed-xsmall-v1"
+    embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"mixedbread-ai/mxbai-embed-xsmall-v1"
 
 # LLM model used for representing topics
 hf_model_name = "bartowski/Llama-3.2-3B-Instruct-GGUF" #"bartowski/Phi-3.1-mini-128k-instruct-GGUF"
@@ -699,6 +699,8 @@ def visualise_topics(
     if visualisation_type_radio == "Topic document graph":
         try:
             topics_vis = visualize_documents_custom(topic_model, docs, hover_labels = label_list, reduced_embeddings=reduced_embeddings, hide_annotations=True, hide_document_hover=False, custom_labels=True, sample = sample_prop, width= 1200, height = 750)
+
+            #topics_vis = topic_model.visualize_documents(docs, reduced_embeddings=reduced_embeddings, hide_annotations=True, hide_document_hover=False, custom_labels=True, sample = sample_prop, width= 1200, height = 750)
 
             topics_vis_name = output_folder + data_file_name_no_ext + '_' + 'vis_topic_docs_' + today_rev + '.html'
             topics_vis.write_html(topics_vis_name)
