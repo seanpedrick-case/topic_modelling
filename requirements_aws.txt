@@ -1,12 +1,11 @@
-hdbscan==0.8.40
-pandas==2.2.3
-plotly==5.24.1
-scikit-learn==1.5.2
-umap-learn==0.5.7
-boto3==1.35.64
-spacy==3.8.0
+pandas==2.3.3
+plotly==6.3.1
+scikit-learn==1.7.2
+umap-learn==0.5.9.post2
+boto3==1.40.55
+spacy==3.8.7
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz
-gradio==5.8.0
+gradio==5.49.1
 pyarrow
 openpyxl
 Faker
@@ -14,6 +13,9 @@ presidio_analyzer==2.2.35
 presidio_anonymizer==2.2.35
 scipy
 polars
-transformers==4.46.3
-spaces
-#numpy==1.26.4
+transformers==4.57.1
+accelerate==1.11.0
+bertopic==0.17.3
+sentence-transformers==5.1.1
+spaces==0.42.1
+numpy==2.2.6

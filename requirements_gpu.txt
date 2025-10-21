@@ -1,15 +1,14 @@
-hdbscan==0.8.40
-pandas==2.3.0
-plotly==5.24.1
-scikit-learn==1.5.2
-umap-learn==0.5.7
-gradio==5.34.2
-boto3==1.38.43
-transformers==4.51.1
-accelerate==1.1.1
-torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
-bertopic==0.16.4
-spacy==3.8.4
+pandas==2.3.3
+plotly==6.3.1
+scikit-learn==1.7.2
+umap-learn==0.5.9.post2
+gradio==5.49.1
+boto3==1.40.55
+transformers==4.57.1
+accelerate==1.11.0
+torch==2.6.0 --extra-index-url https://download.pytorch.org/whl/cu124
+bertopic==0.17.3
+spacy==3.8.7
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz
 pyarrow
 openpyxl
@@ -19,7 +18,7 @@ presidio_anonymizer==2.2.355
 scipy
 polars
 llama-cpp-python==0.3.4 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
-sentence-transformers==3.3.1
-spaces
-numpy==1.26.4
+sentence-transformers==5.1.1
+spaces==0.42.1
+numpy==2.2.6
 
