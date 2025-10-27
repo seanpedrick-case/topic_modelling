@@ -1,6 +1,6 @@
 # Dendrograms will not work with the latest version of scipy (1.12.0), so installing the version prior to be safe
 #os.system("pip install scipy==1.11.4")
-
+import spaces
 import gradio as gr
 from datetime import datetime
 import pandas as pd
@@ -26,6 +26,7 @@ from umap import UMAP
 umap_n_neighbours = 15
 umap_min_dist = 0.0
 umap_metric = 'cosine'
+random_seed = 42
 
 today = datetime.now().strftime("%d%m%Y")
 today_rev = datetime.now().strftime("%Y%m%d")
@@ -545,6 +546,7 @@ def reduce_outliers(topic_model: BERTopic, docs: List[str], embeddings_out: np.n
     
     return output_text, output_list, topic_model
 
+@spaces.GPU(duration=120)
 def represent_topics(topic_model: BERTopic, docs: List[str], data_file_name_no_ext: str, high_quality_mode: str, save_topic_model: str, representation_type: str, vectoriser_model: CountVectorizer, split_sentence_drop: str, data: PandasDataFrame, progress: gr.Progress = gr.Progress(track_tqdm=True)) -> tuple:
     """
     Represents topics using the specified representation model and updates the topic labels accordingly.
