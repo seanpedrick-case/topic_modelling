@@ -1,10 +1,11 @@
+import spaces
 import os
 import socket
 import gradio as gr
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import spaces
+
 
 from funcs.topic_core_funcs import pre_clean, optimise_zero_shot, extract_topics, reduce_outliers, represent_topics, visualise_topics, save_as_pytorch_model, change_default_vis_col
 from funcs.helper_functions import initial_file_load, custom_regex_load, ensure_output_folder_exists, output_folder, get_connection_params, get_or_create_env_var

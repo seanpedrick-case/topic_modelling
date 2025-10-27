@@ -14,9 +14,9 @@ PandasDataFrame = Type[pd.DataFrame]
 from funcs.clean_funcs import initial_clean, regex_clean
 from funcs.anonymiser import expand_sentences_spacy
 from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs, output_folder, get_or_create_env_var, custom_regex_load
-from funcs.embeddings import make_or_load_embeddings, torch_device
+from funcs.embeddings import make_or_load_embeddings
 from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, hierarchical_topics_custom, visualize_hierarchy_custom
-from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag, random_seed, RUNNING_ON_AWS
+
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
 import funcs.anonymiser as anon
@@ -31,14 +31,14 @@ today = datetime.now().strftime("%d%m%Y")
 today_rev = datetime.now().strftime("%Y%m%d")
 
 # Load embeddings
-if RUNNING_ON_AWS=="0":
-    embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"mixedbread-ai/mxbai-embed-xsmall-v1" #"mixedbread-ai/mxbai-embed-large-v1"
-else:
-    embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"mixedbread-ai/mxbai-embed-xsmall-v1"
+# if RUNNING_ON_AWS=="0":
+#     embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"mixedbread-ai/mxbai-embed-xsmall-v1" #"mixedbread-ai/mxbai-embed-large-v1"
+# else:
+embeddings_name = "mixedbread-ai/mxbai-embed-large-v1" #"mixedbread-ai/mxbai-embed-xsmall-v1"
 
 # LLM model used for representing topics
-hf_model_name = "bartowski/Llama-3.2-3B-Instruct-GGUF" #"bartowski/Phi-3.1-mini-128k-instruct-GGUF"
-hf_model_file = "Llama-3.2-3B-Instruct-Q5_K_M.gguf" #"Phi-3.1-mini-128k-instruct-Q4_K_M.gguf"
+hf_model_name = "unsloth/gemma-2-it-GGUF"#"bartowski/Llama-3.2-3B-Instruct-GGUF" #"bartowski/Phi-3.1-mini-128k-instruct-GGUF"
+hf_model_file = "gemma-2-2b-it.q8_0.gguf" #"Llama-3.2-3B-Instruct-Q5_K_M.gguf" #"Phi-3.1-mini-128k-instruct-Q4_K_M.gguf"
 
 # When topic modelling column is chosen, change the default visualisation column to the same
 def change_default_vis_col(in_colnames:List[str]):
@@ -572,6 +572,8 @@ def represent_topics(topic_model: BERTopic, docs: List[str], data_file_name_no_e
     # Load in representation model
 
     progress(0.1, desc= "Loading model and creating new topic representation")
+
+    from funcs.representation_model import create_representation_model, llm_config, chosen_start_tag
 
     representation_model = create_representation_model(representation_type, llm_config, hf_model_name, hf_model_file, chosen_start_tag, high_quality_mode)  
 

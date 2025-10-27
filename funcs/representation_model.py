@@ -2,7 +2,7 @@ import os
 from bertopic.representation import LlamaCPP
 
 from pydantic import BaseModel
-import torch.cuda
+
 from huggingface_hub import hf_hub_download
 from gradio import Warning
 
@@ -19,6 +19,19 @@ random_seed = 42
 RUNNING_ON_AWS = get_or_create_env_var('RUNNING_ON_AWS', '0')
 print(f'The value of RUNNING_ON_AWS is {RUNNING_ON_AWS}')
 
+from torch import cuda, backends, version, get_num_threads
+
+print("Is CUDA enabled? ", cuda.is_available())
+print("Is a CUDA device available on this computer?", backends.cudnn.enabled)
+if cuda.is_available():
+    torch_device = "gpu"
+    print("Cuda version installed is: ", version.cuda)
+    high_quality_mode = "Yes"
+    os.system("nvidia-smi")
+else: 
+    torch_device =  "cpu"
+    high_quality_mode = "No"
+
 # Currently set n_gpu_layers to 0 even with cuda due to persistent bugs in implementation with cuda
 print("torch device for representation functions:", torch_device)
 if torch_device == "gpu":
@@ -29,7 +42,7 @@ else: #     torch_device =  "cpu"
     n_gpu_layers = 0
 
 #print("Running on device:", torch_device)
-n_threads = torch.get_num_threads()
+n_threads = get_num_threads()
 print("CPU n_threads:", n_threads)
 
 # Default Model parameters

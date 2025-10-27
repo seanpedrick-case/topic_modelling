@@ -2,29 +2,18 @@ import time
 import numpy as np
 import os
 import spaces
-from torch import cuda, backends, version
+
 from sentence_transformers import SentenceTransformer
 from sklearn.pipeline import make_pipeline
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# Check for torch cuda
+
 # If you want to disable cuda for testing purposes
 #os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
-print("Is CUDA enabled? ", cuda.is_available())
-print("Is a CUDA device available on this computer?", backends.cudnn.enabled)
-if cuda.is_available():
-    torch_device = "gpu"
-    print("Cuda version installed is: ", version.cuda)
-    high_quality_mode = "Yes"
-    os.system("nvidia-smi")
-else: 
-    torch_device =  "cpu"
-    high_quality_mode = "No"
 
-
-@spaces.GPU
+@spaces.GPU(duration=120)
 def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndarray, embeddings_super_compress: str, high_quality_mode_opt: str, embeddings_name:str="mixedbread-ai/mxbai-embed-xsmall-v1", random_seed:int=42) -> np.ndarray:
     """
     Create or load embeddings for the given documents.
@@ -40,6 +29,20 @@ def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndar
     Returns:
         np.ndarray: The generated or loaded embeddings.
     """
+
+    # Check for torch cuda
+    from torch import cuda, backends, version
+
+    print("Is CUDA enabled? ", cuda.is_available())
+    print("Is a CUDA device available on this computer?", backends.cudnn.enabled)
+    if cuda.is_available():
+        torch_device = "gpu"
+        print("Cuda version installed is: ", version.cuda)
+        high_quality_mode = "Yes"
+        os.system("nvidia-smi")
+    else: 
+        torch_device =  "cpu"
+        high_quality_mode = "No"
 
     if high_quality_mode_opt == "Yes":
     # Define a list of possible local locations to search for the model
