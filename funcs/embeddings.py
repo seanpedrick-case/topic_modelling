@@ -1,19 +1,23 @@
+import spaces
 import time
 import numpy as np
 import os
-import spaces
+
 
 from sentence_transformers import SentenceTransformer
 from sklearn.pipeline import make_pipeline
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
+from funcs.helper_functions import GPU_SPACE_DURATION
+
+
 
 
 # If you want to disable cuda for testing purposes
 #os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 
-@spaces.GPU(duration=120)
+@spaces.GPU(duration=GPU_SPACE_DURATION)
 def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndarray, embeddings_super_compress: str, high_quality_mode_opt: str, embeddings_name:str="mixedbread-ai/mxbai-embed-xsmall-v1", random_seed:int=42) -> np.ndarray:
     """
     Create or load embeddings for the given documents.

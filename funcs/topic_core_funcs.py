@@ -13,7 +13,7 @@ PandasDataFrame = Type[pd.DataFrame]
 
 from funcs.clean_funcs import initial_clean, regex_clean
 from funcs.anonymiser import expand_sentences_spacy
-from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs, output_folder, get_or_create_env_var, custom_regex_load
+from funcs.helper_functions import read_file, zip_folder, delete_files_in_folder, save_topic_outputs, output_folder, get_or_create_env_var, custom_regex_load, GPU_SPACE_DURATION
 from funcs.embeddings import make_or_load_embeddings
 from funcs.bertopic_vis_documents import visualize_documents_custom, visualize_hierarchical_documents_custom, hierarchical_topics_custom, visualize_hierarchy_custom
 
@@ -27,6 +27,7 @@ umap_n_neighbours = 15
 umap_min_dist = 0.0
 umap_metric = 'cosine'
 random_seed = 42
+
 
 today = datetime.now().strftime("%d%m%Y")
 today_rev = datetime.now().strftime("%Y%m%d")
@@ -546,7 +547,7 @@ def reduce_outliers(topic_model: BERTopic, docs: List[str], embeddings_out: np.n
     
     return output_text, output_list, topic_model
 
-@spaces.GPU(duration=120)
+@spaces.GPU(duration=GPU_SPACE_DURATION)
 def represent_topics(topic_model: BERTopic, docs: List[str], data_file_name_no_ext: str, high_quality_mode: str, save_topic_model: str, representation_type: str, vectoriser_model: CountVectorizer, split_sentence_drop: str, data: PandasDataFrame, progress: gr.Progress = gr.Progress(track_tqdm=True)) -> tuple:
     """
     Represents topics using the specified representation model and updates the topic labels accordingly.

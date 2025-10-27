@@ -33,6 +33,9 @@ default_value = 'output/'
 output_folder = get_or_create_env_var(env_var_name, default_value)
 print(f'The value of {env_var_name} is {output_folder}')
 
+GPU_SPACE_DURATION = int(get_or_create_env_var('GPU_SPACE_DURATION', '60'))
+print(f'The value of GPU_SPACE_DURATION is {GPU_SPACE_DURATION}')
+
 def ensure_output_folder_exists():
     """Checks if the 'output/' folder exists, creates it if not."""
 
