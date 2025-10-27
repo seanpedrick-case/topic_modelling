@@ -35,18 +35,18 @@ def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndar
     """
 
     # Check for torch cuda
-    from torch import cuda, backends, version
+    # from torch import cuda, backends, version
 
-    print("Is CUDA enabled? ", cuda.is_available())
-    print("Is a CUDA device available on this computer?", backends.cudnn.enabled)
-    if cuda.is_available():
-        torch_device = "gpu"
-        print("Cuda version installed is: ", version.cuda)
-        high_quality_mode = "Yes"
-        os.system("nvidia-smi")
-    else: 
-        torch_device =  "cpu"
-        high_quality_mode = "No"
+    # print("Is CUDA enabled? ", cuda.is_available())
+    # print("Is a CUDA device available on this computer?", backends.cudnn.enabled)
+    # if cuda.is_available():
+    #     torch_device = "gpu"
+    #     print("Cuda version installed is: ", version.cuda)
+    #     high_quality_mode = "Yes"
+    #     os.system("nvidia-smi")
+    # else: 
+    #     torch_device =  "cpu"
+    #     high_quality_mode = "No"
 
     if high_quality_mode_opt == "Yes":
     # Define a list of possible local locations to search for the model

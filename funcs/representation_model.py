@@ -19,16 +19,30 @@ random_seed = 42
 RUNNING_ON_AWS = get_or_create_env_var('RUNNING_ON_AWS', '0')
 print(f'The value of RUNNING_ON_AWS is {RUNNING_ON_AWS}')
 
-from torch import cuda, backends, version, get_num_threads
+USE_GPU = get_or_create_env_var('USE_GPU', '0')
+print(f'The value of USE_GPU is {USE_GPU}')
 
-print("Is CUDA enabled? ", cuda.is_available())
-print("Is a CUDA device available on this computer?", backends.cudnn.enabled)
-if cuda.is_available():
+# from torch import cuda, backends, version, get_num_threads
+
+# print("Is CUDA enabled? ", cuda.is_available())
+# print("Is a CUDA device available on this computer?", backends.cudnn.enabled)
+# if cuda.is_available():
+#     torch_device = "gpu"
+#     print("Cuda version installed is: ", version.cuda)
+#     high_quality_mode = "Yes"
+#     os.system("nvidia-smi")
+# else: 
+#     torch_device =  "cpu"
+#     high_quality_mode = "No"
+
+if USE_GPU == "1":
+    print("Using GPU for representation functions")
     torch_device = "gpu"
     print("Cuda version installed is: ", version.cuda)
     high_quality_mode = "Yes"
     os.system("nvidia-smi")
-else: 
+else:
+    print("Using CPU for representation functions")
     torch_device =  "cpu"
     high_quality_mode = "No"
 
@@ -42,6 +56,7 @@ else: #     torch_device =  "cpu"
     n_gpu_layers = 0
 
 #print("Running on device:", torch_device)
+from torch import get_num_threads
 n_threads = get_num_threads()
 print("CPU n_threads:", n_threads)
 
@@ -56,7 +71,7 @@ seed: int = random_seed
 reset: bool = True
 stream: bool = False
 n_threads: int = n_threads
-n_batch:int = 256
+n_batch:int = 512
 n_ctx:int = 8192 #4096. # Set to 8192 just to avoid any exceeded context window issues
 sample:bool = True
 trust_remote_code:bool =True
