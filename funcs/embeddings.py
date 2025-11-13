@@ -71,6 +71,10 @@ def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndar
                 TruncatedSVD(100, random_state=random_seed)
                 )
 
+    # Ensure embeddings_out is a numpy array (handle case where it might be a string from Gradio state)
+    if not isinstance(embeddings_out, np.ndarray):
+        embeddings_out = np.array([])
+    
     # If no embeddings found, make or load in
     if embeddings_out.size == 0:
         print("Embeddings not found. Loading or generating new ones.")

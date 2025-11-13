@@ -197,50 +197,94 @@ def visualize_documents_custom(topic_model,
     if len(non_selected_topics) == 0:
         non_selected_topics = [-1]
 
-    selection = df.loc[df.topic.isin(non_selected_topics), :]
-    selection["text"] = ""
-    selection.loc[len(selection), :] = [None, None, None, selection.x.mean(), selection.y.mean(), "Other documents"]
+    selection = df.loc[df.topic.isin(non_selected_topics), :].copy()
+    if len(selection) > 0:
+        selection["text"] = ""
+        # Only add annotation row if selection is not empty
+        if not hide_annotations:
+            annotation_row = pd.DataFrame({
+                "topic": [None],
+                "doc": [None],
+                "hover_labels": [None],
+                "x": [selection.x.mean()],
+                "y": [selection.y.mean()],
+                "text": ["Other documents"]
+            })
+            selection = pd.concat([selection, annotation_row], ignore_index=True)
 
-    fig.add_trace(
-        go.Scattergl(
-            x=selection.x,
-            y=selection.y,
-            hovertext=selection.hover_labels if not hide_document_hover else None,
-            hoverinfo="text",
-            mode='markers+text',
-            name="other",
-            showlegend=False,
-            marker=dict(color='#CFD8DC', size=5, opacity=0.5),
-            hoverlabel=dict(align='left')
-        )
-    )
+        # Filter out rows where x or y is NaN to keep arrays aligned
+        valid_mask = selection.x.notna() & selection.y.notna()
+        selection_valid = selection[valid_mask].copy()
+
+        # Convert to lists to avoid Series issues
+        x_vals = selection_valid.x.tolist()
+        y_vals = selection_valid.y.tolist()
+        hover_vals = selection_valid.hover_labels.tolist() if not hide_document_hover and len(selection_valid) > 0 else None
+        text_vals = selection_valid.text.tolist() if len(selection_valid) > 0 else []
+
+        if len(x_vals) > 0:  # Only add trace if there are valid data points
+            fig.add_trace(
+                go.Scattergl(
+                    x=x_vals,
+                    y=y_vals,
+                    hovertext=hover_vals,
+                    hoverinfo="text",
+                    mode='markers+text',
+                    name="other",
+                    showlegend=False,
+                    marker=dict(color='#CFD8DC', size=5, opacity=0.5),
+                    hoverlabel=dict(align='left'),
+                    text=text_vals if len(text_vals) > 0 and any(t for t in text_vals if t) else None
+                )
+            )
 
     # Selected topics
     for name, topic in zip(names, unique_topics):
         #print(name)
         #print(topic)
         if topic in topics and topic != -1:
-            selection = df.loc[df.topic == topic, :]
-            selection["text"] = ""
+            selection = df.loc[df.topic == topic, :].copy()
+            if len(selection) > 0:
+                selection["text"] = ""
 
-            if not hide_annotations:
-                selection.loc[len(selection), :] = [None, None, selection.x.mean(), selection.y.mean(), name]
+                if not hide_annotations:
+                    # Add annotation row properly using DataFrame concat
+                    annotation_row = pd.DataFrame({
+                        "topic": [None],
+                        "doc": [None],
+                        "hover_labels": [None],
+                        "x": [selection.x.mean()],
+                        "y": [selection.y.mean()],
+                        "text": [name]
+                    })
+                    selection = pd.concat([selection, annotation_row], ignore_index=True)
 
-            fig.add_trace(
-                go.Scattergl(
-                    x=selection.x,
-                    y=selection.y,
-                    hovertext=selection.hover_labels if not hide_document_hover else None,
-                    hoverinfo="text",
-                    text=selection.text,
-                    mode='markers+text',
-                    name=name,
-                    textfont=dict(
-                        size=12,
-                    ),
-                    marker=dict(size=5, opacity=0.5),
-                    hoverlabel=dict(align='left')
-            ))
+                # Filter out rows where x or y is NaN to keep arrays aligned
+                valid_mask = selection.x.notna() & selection.y.notna()
+                selection_valid = selection[valid_mask].copy()
+
+                # Convert to lists to avoid Series issues
+                x_vals = selection_valid.x.tolist()
+                y_vals = selection_valid.y.tolist()
+                hover_vals = selection_valid.hover_labels.tolist() if not hide_document_hover else None
+                text_vals = selection_valid.text.tolist()
+
+                if len(x_vals) > 0:  # Only add trace if there are valid data points
+                    fig.add_trace(
+                        go.Scattergl(
+                            x=x_vals,
+                            y=y_vals,
+                            hovertext=hover_vals,
+                            hoverinfo="text",
+                            text=text_vals if len(text_vals) > 0 and any(t for t in text_vals if t) else None,
+                            mode='markers+text',
+                            name=name,
+                            textfont=dict(
+                                size=12,
+                            ),
+                            marker=dict(size=5, opacity=0.5),
+                            hoverlabel=dict(align='left')
+                    ))
 
     # Add grid in a 'plus' shape
     x_range = (df.x.min() - abs((df.x.min()) * .15), df.x.max() + abs((df.x.max()) * .15))

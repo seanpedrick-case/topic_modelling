@@ -27,7 +27,7 @@ usage_logs_folder = 'usage/' + today_rev + '/' + host_name + '/'
 
 # Gradio app
 
-app = gr.Blocks(theme = gr.themes.Base())
+app = gr.Blocks(theme=gr.themes.Default(primary_hue="blue"), fill_width = True)
 
 with app:
 
@@ -77,14 +77,14 @@ with app:
                 in_colnames = gr.Dropdown(choices=["Choose a column"], multiselect = True, label="Select column to find topics (first will be chosen if multiple selected).")                
 
         with gr.Accordion("Clean data", open = False):
-            with gr.Row():
+            with gr.Row(equal_height = True):
                 clean_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove html, URLs, non-ASCII, large numbers, emails, postcodes (UK).")
                 drop_duplicate_text = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Remove duplicate text, drop < 50 character strings.")
                 anonymise_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Redact personal information - not 100% effective and slow!")
                 #with gr.Row():
                 split_sentence_drop = gr.Dropdown(value = "No", choices=["Yes", "No"], multiselect=False, label="Split text into sentences. Useful for small datasets.")
                 #additional_custom_delimiters_drop = gr.Dropdown(choices=["and", ",", "as well as", "also"], multiselect=True, label="Additional custom delimiters to split sentences.")
-                min_sentence_length_num = gr.Number(value=5, label="Min char length of split sentences")
+                min_sentence_length_num = gr.Number(value=5, label="Minimum character length of split sentences")
             
             with gr.Row():
                 custom_regex = gr.UploadButton(label="Import custom regex removal file", file_count="multiple")    
@@ -115,11 +115,11 @@ with app:
             topics_btn = gr.Button("Extract topics", variant="primary")
             
         with gr.Row():
-            output_single_text = gr.Textbox(label="Output topics")
+            output_single_text = gr.Textbox(label="Output topics", lines = 5)
             output_file = gr.File(label="Output file")
 
         with gr.Accordion("Post processing options.", open = True):
-            with gr.Row():
+            with gr.Row(equal_height = True):
                 representation_type =  gr.Dropdown(label = "Method for generating new topic labels", value="Default", choices=["Default", "MMR", "KeyBERT", "LLM"]) 
                 represent_llm_btn = gr.Button("Change topic labels")
             with gr.Row():
@@ -135,7 +135,7 @@ with app:
             
         plot_btn = gr.Button("Visualise topic model")
         with gr.Row():
-            vis_output_single_text = gr.Textbox(label="Visualisation output text")
+            vis_output_single_text = gr.Textbox(label="Visualisation output text (if data points don't appear below, download the html output to see them)")
             out_plot_file = gr.File(label="Output plots to file", file_count="multiple")
         plot = gr.Plot(label="Visualise your topics here.")
         plot_2 = gr.Plot(label="Visualise your topics here.")
