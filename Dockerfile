@@ -1,5 +1,5 @@
 # Stage 1: Build dependencies and download models
-FROM public.ecr.aws/docker/library/python:3.11.9-slim-bookworm AS builder
+FROM public.ecr.aws/docker/library/python:3.12.11-slim-trixie AS builder
 
 # Install Lambda web adapter in case you want to run with with an AWS Lamba function URL (not essential if not using Lambda)
 #COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
@@ -31,7 +31,7 @@ RUN python /src/download_model.py
 RUN rm requirements_aws.txt download_model.py
 
 # Stage 2: Final runtime image
-FROM public.ecr.aws/docker/library/python:3.11.9-slim-bookworm
+FROM public.ecr.aws/docker/library/python:3.12.1-slim-trixie
 
 # Create a non-root user
 RUN useradd -m -u 1000 user
@@ -42,9 +42,6 @@ COPY --from=builder /install /usr/local/lib/python3.11/site-packages/
 # Create necessary directories and set ownership
 RUN mkdir -p /home/user/app/output /home/user/.cache/huggingface/hub /home/user/.cache/matplotlib /home/user/app/cache \
     && chown -R user:user /home/user
-
-# Download the quantised phi model directly with curl. Changed at it is so big - not loaded
-#RUN curl -L -o /home/user/app/model/rep/Llama-3.2-3B-Instruct-Q5_K_M.gguf https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/tree/main/Llama-3.2-3B-Instruct-Q5_K_M.gguf
 
 # Copy models from the builder stage
 COPY --from=builder /model/rep /home/user/app/model/rep

@@ -16,7 +16,7 @@ capybara_example_prompt = """USER:I have a topic that contains the following doc
 
 The topic is described by the following keywords: 'meat, beef, eat, eating, emissions, steak, food, health, processed, chicken'.
 
-Based on the information about the topic above, please create a short label of this topic. Make sure you to only return the label and nothing more.
+Based on the information about the topic above, please create a short label of this topic. Return only the label and no other text or explanation.
 
 Topic label: Environmental impacts of eating meat
 """
@@ -54,7 +54,7 @@ I have a topic that contains the following documents:
 
 The topic is described by the following keywords: 'meat, beef, eat, eating, emissions, steak, food, health, processed, chicken'.
 
-Based on the information about the topic above, please create a short label of this topic. Make sure you to only return the label and nothing more.
+Based on the information about the topic above, please create a short label of this topic. Return only the label and no other text or explanation.
 
 Topic label: Environmental impacts of eating meat
 """
@@ -83,7 +83,7 @@ I have a topic that contains the following documents:
 
 The topic is described by the following keywords: 'meat, beef, eat, eating, emissions, steak, food, health, processed, chicken'.
 
-Based on the information about the topic above, please create a short label of this topic. Make sure you to only return the label and nothing more.
+Based on the information about the topic above, please create a short label of this topic. Return only the label and no other text or explanation.
 
 Topic label: Environmental impacts of eating meat
 """
@@ -115,7 +115,7 @@ I have a topic that contains the following documents:
 
 The topic is described by the following keywords: 'meat, beef, eat, eating, emissions, steak, food, health, processed, chicken'.
 
-Based on the information about the topic above, please create a short label of this topic. Make sure you to only return the label and nothing more.
+Based on the information about the topic above, please create a short label of this topic. Return only the label and no other text or explanation.
 
 Topic label: Environmental impacts of eating meat
 """
@@ -129,7 +129,7 @@ I have a topic that contains the following documents:
 
 The topic is described by the following keywords: '[KEYWORDS]'.
 
-Based on the information about the topic above, please create a short label of this topic. Make sure you to only return the label and nothing more.<|end|>
+Based on the information about the topic above, please create a short label of this topic. Return only the label and no other text or explanation.<|end|>
 <|assistant|>
 Topic label:"""
 

@@ -1,5 +1,4 @@
 pandas==2.3.3
-plotly==6.3.1
 scikit-learn==1.7.2
 umap-learn==0.5.9.post2
 boto3==1.40.72
@@ -19,3 +18,4 @@ bertopic==0.17.3
 sentence-transformers==5.1.2
 spaces==0.42.1
 numpy==2.2.6
+plotly<=5.24.1 # Downgrade needed to enable correct topic document output display
