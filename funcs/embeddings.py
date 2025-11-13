@@ -3,15 +3,11 @@ import time
 import numpy as np
 import os
 
-
 from sentence_transformers import SentenceTransformer
 from sklearn.pipeline import make_pipeline
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from funcs.helper_functions import GPU_SPACE_DURATION
-
-
-
 
 # If you want to disable cuda for testing purposes
 #os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
@@ -121,9 +117,22 @@ def make_or_load_embeddings(docs: list, file_list: list, embeddings_out: np.ndar
                 embeddings_out = np.round(embeddings_out, 3) 
                 embeddings_out *= 100
 
+        # Move model to CPU before returning to avoid CUDA initialization in main process
+        if high_quality_mode_opt == "Yes" and hasattr(embedding_model, 'to'):
+            try:
+                embedding_model = embedding_model.to('cpu')
+            except:
+                pass  # If moving to CPU fails, continue anyway
+
         return embeddings_out, embedding_model
 
     else:
         print("Found pre-loaded embeddings.")
+        
+        # Ensure embeddings are on CPU even when loaded from file
+        if hasattr(embeddings_out, 'cpu'):
+            embeddings_out = embeddings_out.cpu().numpy()
+        elif not isinstance(embeddings_out, np.ndarray):
+            embeddings_out = np.array(embeddings_out)
 
         return embeddings_out, embedding_model

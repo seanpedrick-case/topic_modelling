@@ -1,4 +1,5 @@
 import os
+import spaces
 from bertopic.representation import LlamaCPP
 
 from pydantic import BaseModel
@@ -9,7 +10,7 @@ from gradio import Warning
 from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, BaseRepresentation
 from funcs.embeddings import torch_device
 from funcs.prompts import phi3_prompt, phi3_start
-from funcs.helper_functions import get_or_create_env_var
+from funcs.helper_functions import get_or_create_env_var, GPU_SPACE_DURATION
 
 chosen_prompt = phi3_prompt #open_hermes_prompt # stablelm_prompt 
 chosen_start_tag =  phi3_start #open_hermes_start # stablelm_start
@@ -38,7 +39,7 @@ print(f'The value of USE_GPU is {USE_GPU}')
 if USE_GPU == "1":
     print("Using GPU for representation functions")
     torch_device = "gpu"
-    print("Cuda version installed is: ", version.cuda)
+    #print("Cuda version installed is: ", version.cuda)
     high_quality_mode = "Yes"
     os.system("nvidia-smi")
 else:
@@ -156,6 +157,7 @@ def find_model_file(hf_model_name: str, hf_model_file: str, search_folder: str, 
     
     return found_file
 
+@spaces.GPU(duration=GPU_SPACE_DURATION)
 def create_representation_model(representation_type: str, llm_config: dict, hf_model_name: str, hf_model_file: str, chosen_start_tag: str, low_resource_mode: bool) -> dict:
     """
     Creates a representation model based on the specified type and configuration.
