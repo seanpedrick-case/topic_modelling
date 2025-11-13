@@ -18,7 +18,7 @@ presidio_anonymizer>=2.2.360
 scipy>=1.15.3
 polars>=1.34.0
 llama-cpp-python==0.3.4 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
-sentence-transformers==5.2.0
+sentence-transformers==5.1.2
 spaces==0.42.1
 numpy==2.2.6
 

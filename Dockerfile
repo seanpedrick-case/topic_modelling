@@ -15,11 +15,11 @@ WORKDIR /src
 # Copy requirements file and install dependencies. Sentence transformers and Bertopic are installed without dependencies so that torch is not reinstalled.
 COPY requirements_aws.txt .
 
-RUN pip install torch==2.5.1+cpu --target=/install --index-url https://download.pytorch.org/whl/cpu \
-&& pip install --no-cache-dir --target=/install sentence-transformers==3.2.0 --no-deps \
-&& pip install --no-cache-dir --target=/install bertopic==0.16.4 --no-deps \
+RUN pip install torch>=2.6.0+cpu --target=/install --index-url https://download.pytorch.org/whl/cpu \
+&& pip install --no-cache-dir --target=/install sentence-transformers>=5.1.2 --no-deps \
+&& pip install --no-cache-dir --target=/install bertopic==0.17.3 --no-deps \
 && pip install --no-cache-dir --target=/install -r requirements_aws.txt \
-&& pip install --no-cache-dir --target=/install gradio==5.6.0
+&& pip install --no-cache-dir --target=/install gradio==5.49.1
 
 # Add /install to the PYTHONPATH
 ENV PYTHONPATH="/install:${PYTHONPATH}"

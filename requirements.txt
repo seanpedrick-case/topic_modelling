@@ -16,7 +16,7 @@ presidio_analyzer>=2.2.360
 presidio_anonymizer>=2.2.360
 scipy>=1.15.3
 polars>=1.34.0
-sentence-transformers==5.2.0
+sentence-transformers==5.1.2
 torch>=2.6.0 --extra-index-url https://download.pytorch.org/whl/cu124
 #https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.2/llama_cpp_python-0.3.2-cp311-cp311-win_amd64.whl # Exact wheel specified for windows
 #llama-cpp-python==0.3.2 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
